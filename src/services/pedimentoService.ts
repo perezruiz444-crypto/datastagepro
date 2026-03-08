@@ -173,6 +173,7 @@ const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501>
         tipoOperacion: row[2] || '',
         clave: row[3] || '',
         tipoPedimento: row[4] || '',
+        fechaRecepcion: row[5] || '',
       });
     }
   }
