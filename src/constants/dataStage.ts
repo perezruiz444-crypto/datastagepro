@@ -409,6 +409,23 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Descripción forma de pago',
     'Importe del pago',
   ],
+  'Inci': [
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave de Documento',
+    'Consecutivo de Remesa',
+    'Número de Selección',
+    'Fecha Inicio Reconocimiento',
+    'Hora Inicio Reconocimiento',
+    'Fecha Fin Reconocimiento',
+    'Hora Fin Reconocimiento',
+    'Fracción Arancelaria',
+    'Secuencia de la Fracción',
+    'Grado de Incidencia',
+    'Fecha de Selección',
+    'Patente Original Cruda',
+  ],
 };
 
 /**
