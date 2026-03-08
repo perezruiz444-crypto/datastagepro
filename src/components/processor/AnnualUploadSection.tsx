@@ -98,6 +98,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
       return;
     }
 
+    const skipped: string[] = [];
     for (const file of zipFiles) {
       let guessedMonth = guessMonth(file.name);
       try {
@@ -107,9 +108,14 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
       } catch (e) {
         console.error('Error detectando periodo:', e);
       }
-      if (guessedMonth) newFilesMap[guessedMonth] = file;
+      if (guessedMonth) {
+        newFilesMap[guessedMonth] = file;
+      } else {
+        skipped.push(file.name);
+      }
     }
 
+    setSkippedFiles(skipped);
     setDetectedYears(newYears);
     onFilesChange(newFilesMap);
     setIsProcessing(false);
