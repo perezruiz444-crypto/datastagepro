@@ -9,27 +9,35 @@ import {
 const faqs = [
   {
     question: "¿Qué es un archivo Data Stage?",
-    answer: "Es un documento estándar utilizado en el comercio exterior de México para registrar información de importaciones y exportaciones. Normalmente viene en formato .asc dentro de archivos comprimidos .zip.",
+    answer: "Es el formato estándar definido por la ANAM (Agencia Nacional de Aduanas de México) para la consulta de información de pedimentos. Contiene archivos .asc separados por pipes (|) organizados en dos niveles: a nivel pedimento (archivos 501-520, 701-702) y a nivel partida (archivos 551-558). El archivo 501 contiene los datos generales del pedimento y el 551 las partidas.",
   },
   {
-    question: "¿Qué formatos de archivo acepta la herramienta?",
-    answer: "Acepta archivos .zip que contengan uno o más archivos .asc en su interior. La herramienta los descomprime, unifica y convierte automáticamente a formato Excel (.xlsx).",
+    question: "¿Qué tipos de archivos contiene un Data Stage?",
+    answer: "Un Data Stage puede contener hasta 22 tipos de archivos: Datos generales (501), Transporte (502), Guías (503), Contenedores (504), Facturas (505), Fechas del pedimento (506), Casos (507), Cuentas aduaneras (508), Tasas (509), Contribuciones (510), Observaciones (511), Descargos (512), Destinatarios (520), Partidas (551), Mercancías (552), Permisos (553), Casos partida (554), Cuentas partida (555), Tasas partida (556), Contribuciones partida (557), Observaciones partida (558), Rectificaciones (701) y Diferencias (702).",
+  },
+  {
+    question: "¿Qué formatos acepta la herramienta?",
+    answer: "Acepta archivos .zip que contengan archivos .asc en su interior. También permite cargar archivos .asc sueltos para reportes históricos y archivos .xlsx para consolidación multi-anual. Todo se convierte automáticamente a Excel (.xlsx).",
   },
   {
     question: "¿Necesito instalar algún software?",
-    answer: "No. La herramienta funciona completamente en línea desde tu navegador. Solo necesitas subir tu archivo .zip y obtener tu Excel.",
+    answer: "No. La herramienta funciona completamente en línea desde tu navegador. Solo sube tu archivo y obtén tu Excel. No requiere registro ni cuentas externas.",
   },
   {
     question: "¿Es seguro subir mis archivos?",
     answer: "Sí. Los archivos se procesan directamente en tu navegador de forma local. No se envían a ningún servidor externo ni se almacenan permanentemente.",
   },
   {
-    question: "¿Cuántos archivos .asc puede procesar a la vez?",
-    answer: "La herramienta puede procesar múltiples archivos .asc contenidos dentro de un mismo .zip, unificándolos todos en un solo archivo Excel organizado.",
+    question: "¿Qué modos de reporte están disponibles?",
+    answer: "Cuatro modos: Mensual (un ZIP por mes), Anual (12 ZIPs consolidados en un solo reporte con columna de mes), Histórico (múltiples archivos .asc del mismo tipo con etiquetas de periodo) y Multi-Anual (fusión de reportes Excel generados previamente).",
+  },
+  {
+    question: "¿Cuáles son los archivos críticos de un Data Stage?",
+    answer: "Los archivos 501 (Datos generales) y 551 (Partidas) son considerados críticos. El 501 contiene la información base del pedimento y el 551 el detalle de cada partida. La herramienta te alerta si faltan en tu ZIP.",
   },
   {
     question: "¿Tiene algún costo?",
-    answer: "La herramienta es completamente gratuita. No requiere registro ni cuenta de terceros.",
+    answer: "La herramienta es completamente gratuita. No requiere registro, suscripción ni cuentas de terceros.",
   },
 ];
 
