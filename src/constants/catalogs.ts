@@ -78,15 +78,30 @@ export const formatDateYYYYMMDD = (value: string): string => {
 };
 
 /**
- * Extrae los últimos 2 dígitos del año desde un campo de fecha (YYYYMMDD o YYYY-MM-DD).
+ * Extrae los últimos 2 dígitos del año desde un campo de fecha.
+ * Soporta: YYYYMMDD, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
  */
 export const extractYearFromDateField = (value: string): string => {
   const trimmed = value.trim();
+
+  // YYYYMMDD → year = primeros 4 caracteres
   if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-    return trimmed.substring(2, 4);
+    const year = trimmed.substring(0, 4);
+    return year.substring(2, 4);
   }
-  if (trimmed.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed.substring(2, 4);
+
+  // YYYY-MM-DD → year = primeros 4 caracteres
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const year = trimmed.substring(0, 4);
+    return year.substring(2, 4);
   }
+
+  // DD/MM/YYYY o DD-MM-YYYY → year = últimos 4 caracteres
+  const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const year = dmyMatch[1];
+    return year.substring(2, 4);
+  }
+
   return '00';
 };
