@@ -322,8 +322,9 @@ export const generateSeparateSheetsExcelReport = (
           }
         }
 
-        const sheetName = FILE_NAMES[section] || section;
-        XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
+        const rawName = FILE_NAMES[section] || section;
+        const sheetName = rawName.replace(/[:\\\/\?\*\[\]]/g, '_').substring(0, 31);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
     });
 
