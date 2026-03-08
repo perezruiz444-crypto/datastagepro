@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings, AlertTriangle, Key } from 'lucide-react';
+import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings, AlertTriangle, Key, Pencil } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
