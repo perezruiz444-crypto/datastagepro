@@ -1294,6 +1294,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    if (fileKey === 'Inci') {
+      const headers = COLUMN_HEADERS['Inci'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transformInciRow(row));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ Inci: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     if (fileKey === '520') {
       const headers = COLUMN_HEADERS['520'];
       const enrichedRows: string[][] = [headers];
