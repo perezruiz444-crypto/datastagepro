@@ -198,8 +198,6 @@ const Processor = () => {
               </TabsContent>
               <TabsContent value={ReportMode.ANNUAL}>
                 <AnnualUploadSection
-                  selectedYear={selectedYear}
-                  onYearChange={(y) => setSelectedYear(parseInt(y, 10))}
                   files={annualFiles}
                   onFilesChange={setAnnualFiles}
                   onProcess={handleAnnualProcess}
