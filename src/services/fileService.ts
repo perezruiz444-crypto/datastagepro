@@ -245,7 +245,7 @@ export const generateSeparateSheetsExcelReport = (
     sectionsToExport.forEach(section => {
       if (data[section]) {
         const preparedData = prepareDataForExcel(data[section], format);
-        const ws = XLSX.utils.aoa_to_sheet(preparedData, { raw: format === ExportFormat.TEXT });
+        const ws = XLSX.utils.aoa_to_sheet(preparedData);
 
         if (preparedData.length > 0) {
           const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
