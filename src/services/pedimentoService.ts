@@ -572,6 +572,40 @@ const transform512Row = (row: string[], lookup501: Map<string, Context501>): str
 };
 
 /**
+ * Transforma una fila cruda del archivo 555 en la fila de salida de 17 columnas.
+ * Cuentas Aduaneras de Garantía de la Partida. Dos fechas: idx 14 y idx 8.
+ */
+const transform555Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(14);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave de Pedimento (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
+    get(3),                        // Fracción arancelaria
+    get(4),                        // Secuencia de la fracción arancelaria
+    get(5),                        // Clave de institución emisora
+    get(6),                        // Número de cuenta
+    get(7),                        // Folio de la constancia
+    formatDateYYYYMMDD(get(8)),    // Fecha de la constancia
+    get(9),                        // Clave de garantía
+    get(10),                       // Valor unitario del título
+    get(11),                       // Total de la garantía
+    get(12),                       // Cantidad en unidades de medida del precio estimado
+    get(13),                       // Títulos asignados
+  ];
+};
+
+/**
  * Construye lookup de contexto desde la tabla 501 ya enriquecida.
  */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
@@ -942,6 +976,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 554: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '555') {
+      const headers = COLUMN_HEADERS['555'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform555Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 555: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
