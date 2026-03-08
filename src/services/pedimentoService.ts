@@ -396,6 +396,62 @@ const transform520Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
+/**
+ * Transforma una fila cruda del archivo 551 en la fila de salida de 34 columnas.
+ * Incluye cálculo de Precio Unitario USD = ValorDolares / CantidadUMComercial.
+ */
+const transform551Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(29);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  // Precio Unitario USD = ValorDolares (idx10) / CantidadUMComercial (idx11)
+  const valorDolares = parseFloat(get(10)) || 0;
+  const cantComercial = parseFloat(get(11)) || 0;
+  const precioUnitarioUSD = cantComercial !== 0 ? (valorDolares / cantComercial).toString() : '0';
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave de Pedimento (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de Pago Real
+    get(3),                        // Fracción arancelaria
+    get(4),                        // Secuencia de la fracción arancelaria
+    get(5),                        // Subdivisión de la fracción arancelaria
+    get(6),                        // Descripción de la mercancía
+    get(7),                        // Precio Unitario MN
+    get(8),                        // Valor Aduana MN Pedimento
+    get(9),                        // Valor Comercial MN Pedimento
+    get(10),                       // Valor en dólares
+    get(11),                       // Cantidad de mercancía en unidades de medida comercial
+    get(12),                       // Clave de unidad de medida comercial
+    get(12),                       // Unidad de medida comercial (valor crudo, sin catálogo)
+    get(13),                       // Cantidad de mercancía en unidades de medida de la tarifa
+    get(14),                       // Clave de unidad de medida de la tarifa
+    get(14),                       // Unidad de Tarifa (valor crudo, sin catálogo)
+    get(15),                       // Valor agregado
+    get(16),                       // Clave de vinculación
+    get(17),                       // Clave de método de valorización
+    get(17),                       // Descripción de método de valorización (valor crudo, sin catálogo)
+    get(18),                       // Código de la mercancía o producto
+    get(19),                       // Marca de la mercancía o producto
+    get(20),                       // Modelo de la mercancía o producto
+    get(21),                       // Clave de país origen / destino
+    get(22),                       // Clave de país Comprador / vendedor
+    get(23),                       // Clave de entidad federativa de origen
+    get(24),                       // Clave de entidad federativa de destino
+    get(25),                       // Clave de entidad federativa del comprador
+    get(26),                       // Clave de entidad federativa del vendedor
+    precioUnitarioUSD,             // Precio Unitario USD (calculado)
+  ];
+};
+
 const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
 
@@ -723,6 +779,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 512: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '551') {
+      const headers = COLUMN_HEADERS['551'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform551Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 551: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
