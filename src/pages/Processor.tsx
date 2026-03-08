@@ -27,6 +27,7 @@ const Processor = () => {
     Object.fromEntries(MONTH_NAMES.map(m => [m, null]))
   );
   const [errorMessage, setErrorMessage] = useState('');
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
 
   const cancellationSignal = useRef({ current: false });
 
@@ -40,6 +41,7 @@ const Processor = () => {
     setLogs([]);
     setProcessedData({});
     setErrorMessage('');
+    setValidationWarnings([]);
     cancellationSignal.current = { current: false };
   };
 
@@ -55,7 +57,7 @@ const Processor = () => {
     setReportTitle(`${selectedMonth} ${selectedYear}`);
     cancellationSignal.current = { current: false };
     try {
-      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current);
+      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, selectedYear);
       setProcessedData(data);
       setAppState(AppState.RESULTS);
     } catch (error) {
@@ -83,7 +85,7 @@ const Processor = () => {
         const [month, file] = filledMonths[i];
         addLog(`--- Procesando mes: ${month} ---`);
         setProgress({ total: Math.round((i / filledMonths.length) * 100), file: 0, fileName: file.name });
-        const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current);
+        const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, selectedYear);
         monthlyDataArray.push({ month, data });
       }
       const consolidated = consolidateAnnualData(monthlyDataArray, addLog);
@@ -233,6 +235,7 @@ const Processor = () => {
             reportTitle={reportTitle}
             year={selectedYear}
             reportMode={reportMode}
+            warnings={validationWarnings}
           />
         )}
 

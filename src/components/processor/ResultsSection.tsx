@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings } from 'lucide-react';
+import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings, AlertTriangle, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
 import { generateSeparateSheetsExcelReport, generateIndividualExcelFiles } from '@/services/fileService';
-import { FILE_NAMES } from '@/constants/dataStage';
+import { FILE_NAMES, PEDIMENTO_REGEX } from '@/constants/dataStage';
 
 interface ResultsSectionProps {
   data: ProcessedData;
@@ -12,44 +12,75 @@ interface ResultsSectionProps {
   reportTitle: string;
   year: number;
   reportMode: ReportMode;
+  warnings?: string[];
 }
 
-const KpiCard: React.FC<{ title: string; value: number; icon: React.ReactNode; className?: string }> = ({
+const KpiCard: React.FC<{ title: string; value: number | string; icon: React.ReactNode; className?: string }> = ({
   title, value, icon, className,
 }) => (
   <div className={`bg-card rounded-xl shadow-sm p-6 border-l-4 transition-transform duration-300 hover:-translate-y-1 hover:shadow-md ${className}`}>
     <div className="flex items-center justify-between">
       <div>
         <h3 className="text-muted-foreground font-medium mb-1 text-sm">{title}</h3>
-        <p className="text-3xl font-bold text-foreground">{value.toLocaleString()}</p>
+        <p className="text-3xl font-bold text-foreground">{typeof value === 'number' ? value.toLocaleString() : value}</p>
       </div>
       <div className="text-primary">{icon}</div>
     </div>
   </div>
 );
 
-export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, reportTitle, year, reportMode }) => {
+export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, reportTitle, year, reportMode, warnings = [] }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.TEXT);
 
   const processedFiles = Object.keys(data);
   const totalFiles = processedFiles.length;
-  const headerAdjustment = reportMode === ReportMode.HISTORICAL ? 1 : 0;
+  
+  // Data now includes header row from enrichment, so subtract 1 for record count
+  const hasHeaders = reportMode !== ReportMode.HISTORICAL;
   const totalRecords = Object.values(data).reduce(
-    (acc, records) => acc + (records.length > 0 ? records.length - headerAdjustment : 0), 0
+    (acc, records) => acc + (records.length > (hasHeaders ? 1 : 0) ? records.length - (hasHeaders ? 1 : 0) : 0), 0
   );
+
+  // Count unique pedimentos from 501
+  let uniquePedimentos = 0;
+  if (data['501'] && data['501'].length > 1) {
+    const pedSet = new Set<string>();
+    for (let i = 1; i < data['501'].length; i++) {
+      const ped = data['501'][i][0];
+      if (ped && PEDIMENTO_REGEX.test(ped)) pedSet.add(ped);
+    }
+    uniquePedimentos = pedSet.size;
+  }
 
   return (
     <Card>
       <CardHeader className="text-center">
         <CheckCircle className="h-12 w-12 text-secondary mx-auto mb-2" />
         <CardTitle>Archivos Procesados Exitosamente</CardTitle>
-        <CardDescription>Los datos están listos para ser descargados.</CardDescription>
+        <CardDescription>Los datos están listos para ser descargados con Pedimento Unificado.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <KpiCard title="Archivos/Tipos Procesados" value={totalFiles} icon={<FileText className="h-8 w-8" />} className="border-l-primary" />
-          <KpiCard title="Registros Consolidados" value={totalRecords} icon={<ListOrdered className="h-8 w-8" />} className="border-l-secondary" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <KpiCard title="Archivos Procesados" value={totalFiles} icon={<FileText className="h-8 w-8" />} className="border-l-primary" />
+          <KpiCard title="Registros Totales" value={totalRecords} icon={<ListOrdered className="h-8 w-8" />} className="border-l-secondary" />
+          {uniquePedimentos > 0 && (
+            <KpiCard title="Pedimentos Únicos" value={uniquePedimentos} icon={<Key className="h-8 w-8" />} className="border-l-accent" />
+          )}
         </div>
+
+        {/* Validation warnings */}
+        {warnings.length > 0 && (
+          <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-xl">
+            <h3 className="text-sm font-semibold text-destructive mb-3 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Advertencias de Validación ({warnings.length})
+            </h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-destructive/80">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Export format toggle */}
         <div className="p-4 bg-muted/50 border rounded-xl">
@@ -83,6 +114,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           </div>
           <p className="mt-3 text-xs text-muted-foreground italic">
             * <strong>Texto</strong> evita que Excel convierta "001" en "1". <strong>Numérico</strong> permite operaciones matemáticas.
+            La columna Pedimento siempre se exporta como texto.
           </p>
         </div>
 
@@ -91,11 +123,14 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           <h3 className="text-base font-medium text-foreground mb-3 border-b pb-2">Desglose de Archivos:</h3>
           <div className="max-h-48 overflow-y-auto bg-muted/30 p-3 rounded-md border">
             <ul className="list-disc list-inside space-y-1 text-muted-foreground text-sm">
-              {processedFiles.map(fileKey => (
-                <li key={fileKey}>
-                  <span className="font-semibold">{fileKey}.asc</span> ({FILE_NAMES[fileKey] || 'Desconocido'}) - {(data[fileKey].length > 0 ? data[fileKey].length - headerAdjustment : 0).toLocaleString()} registros.
-                </li>
-              ))}
+              {processedFiles.map(fileKey => {
+                const recordCount = data[fileKey].length > (hasHeaders ? 1 : 0) ? data[fileKey].length - (hasHeaders ? 1 : 0) : 0;
+                return (
+                  <li key={fileKey}>
+                    <span className="font-semibold">{fileKey}.asc</span> ({FILE_NAMES[fileKey] || 'Desconocido'}) - {recordCount.toLocaleString()} registros.
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>

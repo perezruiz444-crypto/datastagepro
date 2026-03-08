@@ -1,7 +1,10 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { ProgressState, ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
-import { FILE_NAMES, CRITICAL_FILES, MONTH_NAMES } from '@/constants/dataStage';
+import { FILE_NAMES, CRITICAL_FILES, MONTH_NAMES, COLUMN_HEADERS, generateFallbackHeaders } from '@/constants/dataStage';
+import { enrichWithPedimentoUnificado, validateProcessedData } from '@/services/pedimentoService';
+
+export { enrichWithPedimentoUnificado, validateProcessedData };
 
 export const detectMonthFromZipFile = async (file: File): Promise<string | null> => {
   try {
@@ -49,7 +52,8 @@ export const processZipFile = async (
   file: File,
   onLog: (message: string) => void,
   onProgress: (progress: ProgressState) => void,
-  cancellationSignal: { current: boolean }
+  cancellationSignal: { current: boolean },
+  year?: number
 ): Promise<ProcessedData> => {
   onLog('Iniciando análisis del archivo ZIP...');
   const zip = await JSZip.loadAsync(file);
@@ -120,6 +124,15 @@ export const processZipFile = async (
     onLog(`⚠️ ATENCIÓN: Faltan archivos críticos: ${missingCritical.map(id => `${id} (${FILE_NAMES[id] || 'N/A'})`).join(', ')}`);
   }
 
+  // Enrich with Pedimento Unificado + headers
+  if (year !== undefined) {
+    onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
+    const enrichedData = enrichWithPedimentoUnificado(processedData, year, onLog);
+    onLog('--- Validando integridad de datos ---');
+    validateProcessedData(enrichedData, onLog);
+    return enrichedData;
+  }
+
   return processedData;
 };
 
@@ -152,12 +165,19 @@ export const consolidateAnnualData = (
       if (!consolidated[fileKey]) {
         consolidated[fileKey] = [];
         if (records.length > 0) {
-          const header = ['Mes', ...records[0]];
+          // First row is header (from enrichment) - add "Mes" column after "Pedimento"
+          const header = [...records[0]];
+          header.splice(1, 0, 'Mes');
           consolidated[fileKey].push(header);
         }
       }
+      // Skip header row (index 0), add month column to data rows
       const dataRows = records.slice(1);
-      const recordsWithMonth = dataRows.map(record => [month, ...record]);
+      const recordsWithMonth = dataRows.map(record => {
+        const row = [...record];
+        row.splice(1, 0, month);
+        return row;
+      });
       consolidated[fileKey].push(...recordsWithMonth);
     });
   });
@@ -216,8 +236,9 @@ const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
   if (format === ExportFormat.TEXT) return data;
 
   return data.map((row, rowIndex) => {
-    if (rowIndex === 0) return row;
-    return row.map(cell => {
+    if (rowIndex === 0) return row; // Keep headers as text
+    return row.map((cell, colIndex) => {
+      if (colIndex === 0) return cell; // Keep Pedimento column as text always
       if (cell === '' || cell === null || cell === undefined) return '';
       const cellStr = String(cell).trim();
       if (/^-?\d*\.?\d+$/.test(cellStr)) {
@@ -250,6 +271,13 @@ export const generateSeparateSheetsExcelReport = (
         if (preparedData.length > 0) {
           const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
           ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+
+          // Auto-width columns based on header length
+          if (preparedData[0]) {
+            ws['!cols'] = preparedData[0].map((header: any) => ({
+              wch: Math.max(String(header).length + 2, 12)
+            }));
+          }
         }
 
         const sheetName = FILE_NAMES[section] || section;
@@ -300,6 +328,12 @@ export const generateIndividualExcelFiles = async (
         if (preparedData.length > 0) {
           const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
           ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+
+          if (preparedData[0]) {
+            ws['!cols'] = preparedData[0].map((header: any) => ({
+              wch: Math.max(String(header).length + 2, 12)
+            }));
+          }
         }
 
         const sheetName = FILE_NAMES[section] || section;
