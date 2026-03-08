@@ -345,7 +345,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
-    // === LEGACY: prepend Pedimento Unificado for other tables ===
+    if (fileKey === '505') {
+      const headers = COLUMN_HEADERS['505'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform505Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 505: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     const sampleColCount = rows[0].length + 1;
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
     const enrichedRows: string[][] = [headers];
