@@ -5,6 +5,7 @@ import {
   TIPO_PEDIMENTO,
   MEDIO_TRANSPORTE,
   DESTINO_MERCANCIA,
+  TIPO_GUIA,
   formatDateYYYYMMDD,
   extractYearFromDateField,
 } from '@/constants/catalogs';
