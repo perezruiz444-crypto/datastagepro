@@ -51,12 +51,12 @@ const Processor = () => {
   };
 
   // Monthly processing
-  const handleMonthlyFileSelect = async (file: File) => {
+  const handleMonthlyFileSelect = async (file: File, month: string, year: number) => {
     setAppState(AppState.PROCESSING);
-    setReportTitle(`${selectedMonth} ${selectedYear}`);
+    setReportTitle(`${month} ${year}`);
     cancellationSignal.current = { current: false };
     try {
-      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, selectedYear);
+      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, year);
       setProcessedData(data);
       setAppState(AppState.RESULTS);
     } catch (error) {
