@@ -698,6 +698,50 @@ const transform558Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
+/**
+ * Tabla 701 – Rectificaciones y Pedimentos Anteriores.
+ * Dos llaves de pedimento: A (principal, año en idx 13) y B (anterior, año en idx 9).
+ * JOIN con 501: solo 2 campos (Tipo de Operación, Tipo de Pedimento).
+ * Tres campos de fecha: idx 13, idx 4, idx 9 → DD/MM/YYYY.
+ */
+const transform701Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  // Llave A: Pedimento principal
+  const fechaPagoReal = get(13);
+  const yyA = extractYearFromDateField(fechaPagoReal);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yyA);
+
+  // JOIN con 501: solo Tipo de Operación y Tipo de Pedimento
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  // Llave B: Pedimento Anterior Unificado (condicional: vacío si idx 9 vacío)
+  const fechaOpAnterior = get(9);
+  let pedimentoAnterior = '';
+  if (fechaOpAnterior) {
+    const yyB = extractYearFromDateField(fechaOpAnterior);
+    pedimentoAnterior = buildPedimentoUnificado(get(6), get(5), get(7), yyB);
+  }
+
+  return [
+    pedimento,                              // Pedimento (Llave A)
+    get(2),                                 // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,                      // Tipo de Operación (desde 501)
+    ctx.tipoPedimento,                      // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPagoReal),      // Fecha de pago real
+    get(3),                                 // Clave de documento
+    formatDateYYYYMMDD(get(4)),             // Fecha de pago
+    pedimentoAnterior,                      // Pedimento Anterior Unificado (Llave B)
+    get(8),                                 // Documento Anterior
+    fechaOpAnterior ? formatDateYYYYMMDD(fechaOpAnterior) : '', // Fecha de Operación Anterior
+    get(10),                                // Pedimento Original Crudo
+    get(11),                                // Patente Original
+    get(12),                                // Sección Aduanera Original
+    get(5),                                 // Número de Pedimento Anterior Crudo
+    get(6),                                 // Patente Anterior
+  ];
+};
+
 /** Construye el mapa de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
@@ -1143,6 +1187,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 558: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '701') {
+      const headers = COLUMN_HEADERS['701'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform701Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 701: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
