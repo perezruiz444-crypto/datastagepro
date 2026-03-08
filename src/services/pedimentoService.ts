@@ -801,6 +801,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    if (fileKey === '552') {
+      const headers = COLUMN_HEADERS['552'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform552Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 552: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     if (fileKey === '520') {
       const headers = COLUMN_HEADERS['520'];
       const enrichedRows: string[][] = [headers];
