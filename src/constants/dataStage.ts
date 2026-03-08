@@ -428,6 +428,18 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Fecha de Selección',
     'Patente Original Cruda',
   ],
+  'Sel': [
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave de Documento',
+    'Consecutivo de Remesa',
+    'Número de Selección',
+    'Fecha de Selección',
+    'Hora de Selección',
+    'Resultado del Semáforo Fiscal',
+    'Patente Original Cruda',
+  ],
   'Resumen': [
     'Folio de Extracción',
     'RFC o Patente Consultada',
