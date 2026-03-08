@@ -49,7 +49,7 @@ export const ConsolidatedTableUploadSection: React.FC<HistoricalUploadSectionPro
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Generar Reporte Histórico</CardTitle>
+        <CardTitle>Generar Reporte Consolidado por Tabla</CardTitle>
         <CardDescription>Seleccione un tipo de archivo, suba todos los archivos .asc y asigne una etiqueta de periodo a cada uno.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
