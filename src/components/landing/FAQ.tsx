@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     question: "¿Necesito instalar algún software?",
-    answer: "No. La herramienta funciona completamente en línea a través de Google AI Studio. Solo necesitas un navegador web y tu archivo .zip.",
+    answer: "No. La herramienta funciona completamente en línea desde tu navegador. Solo necesitas subir tu archivo .zip y obtener tu Excel.",
   },
   {
     question: "¿Es seguro subir mis archivos?",
