@@ -129,15 +129,11 @@ export const processZipFile = async (
   }
 
   // Enrich with Pedimento Unificado + headers
-  if (year !== undefined) {
-    onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
-    const enrichedData = enrichWithPedimentoUnificado(processedData, onLog);
-    onLog('--- Validando integridad de datos ---');
-    validateProcessedData(enrichedData, onLog);
-    return enrichedData;
-  }
-
-  return processedData;
+  onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
+  const enrichedData = enrichWithPedimentoUnificado(processedData, onLog);
+  onLog('--- Validando integridad de datos ---');
+  validateProcessedData(enrichedData, onLog);
+  return enrichedData;
 };
 
 export const consolidateAnnualData = (
