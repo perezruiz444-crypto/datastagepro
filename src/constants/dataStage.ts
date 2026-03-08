@@ -23,6 +23,7 @@ export const FILE_NAMES: Record<string, string> = {
   '558': '558 - Observaciones partida',
   '701': '701 - Rectificaciones',
   '702': '702 - Diferencias contrib',
+  'Inci': 'Inci - Incidencias / Reconocimiento',
 };
 
 export const CRITICAL_FILES = ['501', '551'];
