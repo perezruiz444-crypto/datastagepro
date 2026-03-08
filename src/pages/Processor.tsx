@@ -21,7 +21,6 @@ const Processor = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [processedData, setProcessedData] = useState<ProcessedData>({});
   const [reportTitle, setReportTitle] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState(MONTH_NAMES[new Date().getMonth()]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [annualFiles, setAnnualFiles] = useState<Record<string, File | null>>(
     Object.fromEntries(MONTH_NAMES.map(m => [m, null]))

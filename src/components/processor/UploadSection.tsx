@@ -2,33 +2,19 @@ import React, { useState, useCallback, useRef } from 'react';
 import { FileArchive, ArrowRight, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { MONTH_NAMES } from '@/constants/dataStage';
 import { detectPeriodFromZipFile } from '@/services/fileService';
 
 interface UploadSectionProps {
-  onFileSelect: (file: File) => void;
-  selectedMonth: string;
-  selectedYear: number;
-  onMonthChange: (month: string) => void;
-  onYearChange: (year: string) => void;
+  onFileSelect: (file: File, month: string, year: number) => void;
 }
 
-export const UploadSection: React.FC<UploadSectionProps> = ({
-  onFileSelect,
-  selectedMonth,
-  selectedYear,
-  onMonthChange,
-  onYearChange,
-}) => {
+export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [autoDetected, setAutoDetected] = useState(false);
+  const [detectedMonth, setDetectedMonth] = useState<string | null>(null);
+  const [detectedYear, setDetectedYear] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 12 }, (_, i) => currentYear + 1 - i);
 
   const handleFile = useCallback(async (file: File | undefined) => {
     if (!file || !file.name.toLowerCase().endsWith('.zip')) {
@@ -36,18 +22,17 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       return;
     }
     setSelectedFile(file);
-    setAutoDetected(false);
+    setDetectedMonth(null);
+    setDetectedYear(null);
 
     try {
       const { month, year } = await detectPeriodFromZipFile(file);
-      let detected = false;
-      if (month) { onMonthChange(month); detected = true; }
-      if (year) { onYearChange(String(year)); detected = true; }
-      setAutoDetected(detected);
+      if (month) setDetectedMonth(month);
+      if (year) setDetectedYear(year);
     } catch (e) {
       console.error('Error en auto-detección:', e);
     }
-  }, [onMonthChange, onYearChange]);
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
@@ -60,55 +45,28 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     }
   }, [handleFile]);
 
-  const handleContinue = () => { if (selectedFile) onFileSelect(selectedFile); };
+  const handleContinue = () => {
+    if (selectedFile && detectedMonth && detectedYear) {
+      onFileSelect(selectedFile, detectedMonth, detectedYear);
+    }
+  };
+
   const handleCancelSelection = () => {
     setSelectedFile(null);
-    setAutoDetected(false);
+    setDetectedMonth(null);
+    setDetectedYear(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const periodDetected = detectedMonth && detectedYear;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Carga de Archivo ZIP</CardTitle>
-        <CardDescription>Seleccione el periodo y suba el archivo ZIP que contiene sus archivos de datos (.asc).</CardDescription>
+        <CardDescription>Suba el archivo ZIP que contiene sus archivos de datos (.asc). El periodo se detectará automáticamente.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="p-4 bg-muted/50 border rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-base font-medium text-foreground">Periodo del Reporte</h3>
-            {autoDetected && (
-              <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                <Sparkles className="h-3 w-3" /> Detectado automáticamente
-              </Badge>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Mes</label>
-              <Select value={selectedMonth} onValueChange={onMonthChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTH_NAMES.map(month => (
-                    <SelectItem key={month} value={month}>{month}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">Año</label>
-              <Select value={String(selectedYear)} onValueChange={onYearChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {years.map(year => (
-                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
         {!selectedFile ? (
           <>
             <div
@@ -133,12 +91,20 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <div className="bg-primary/5 border-2 border-primary/30 rounded-xl p-6 text-center">
             <FileArchive className="h-12 w-12 text-primary mx-auto mb-4" />
             <p className="text-lg font-medium text-foreground">Archivo listo para procesar:</p>
-            <p className="text-muted-foreground font-mono mb-6 break-all">{selectedFile.name}</p>
+            <p className="text-muted-foreground font-mono mb-3 break-all">{selectedFile.name}</p>
+            {periodDetected && (
+              <Badge variant="secondary" className="text-sm flex items-center gap-1 w-fit mx-auto mb-4">
+                <Sparkles className="h-3 w-3" /> {detectedMonth} {detectedYear} — Detectado automáticamente
+              </Badge>
+            )}
+            {!periodDetected && (
+              <p className="text-sm text-destructive mb-4">No se pudo detectar el periodo del archivo. Verifique el nombre del ZIP.</p>
+            )}
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Button variant="outline" onClick={handleCancelSelection}>
                 <X className="mr-2 h-4 w-4" /> Cambiar Archivo
               </Button>
-              <Button onClick={handleContinue}>
+              <Button onClick={handleContinue} disabled={!periodDetected}>
                 <ArrowRight className="mr-2 h-4 w-4" /> Continuar y Procesar
               </Button>
             </div>
