@@ -169,6 +169,18 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
           <input type="file" ref={bulkInputRef} accept=".zip" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
         </div>
 
+        {/* Skipped files alert */}
+        {skippedFiles.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Archivos no reconocidos</AlertTitle>
+            <AlertDescription>
+              No se pudo detectar el periodo de: <span className="font-mono font-semibold">{skippedFiles.join(', ')}</span>.
+              Renombre los archivos incluyendo el mes, por ejemplo: <span className="font-mono font-semibold">Enero_2025.zip</span> o <span className="font-mono font-semibold">01-2025.zip</span>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Validation alerts */}
         {uploadedFilesCount > 0 && (
           allComplete ? (
