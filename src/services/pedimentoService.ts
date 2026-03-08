@@ -1313,6 +1313,24 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    if (fileKey === 'Resumen') {
+      const headers = COLUMN_HEADERS['Resumen'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        try {
+          enrichedRows.push(transformResumenRow(row));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ Resumen: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     if (fileKey === '520') {
       const headers = COLUMN_HEADERS['520'];
       const enrichedRows: string[][] = [headers];
