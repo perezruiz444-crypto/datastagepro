@@ -84,11 +84,20 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           </div>
         )}
 
-        {/* Export format toggle */}
+        {/* Export config */}
         <div className="p-4 bg-muted/50 border rounded-xl">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Settings className="h-4 w-4" /> Configuración de Exportación
           </h3>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap flex items-center gap-1"><Pencil className="h-3.5 w-3.5" /> Nombre del archivo:</span>
+            <Input
+              value={customFileName}
+              onChange={(e) => setCustomFileName(e.target.value)}
+              className="max-w-md"
+              placeholder="Nombre del archivo de salida"
+            />
+          </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <span className="text-sm font-medium text-muted-foreground">Formato de celdas:</span>
             <div className="flex bg-muted p-1 rounded-lg">
