@@ -83,10 +83,16 @@ export const enrichWithPedimentoUnificado = (
     // Build enriched rows: prepend Pedimento Unificado
     const enrichedRows: string[][] = [headers];
 
+    // Detect if first row is a raw header (non-numeric patente/indice/seccion)
+    const dataRows = rows.length > 0 && rows[0].length >= 3 &&
+      (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
+      ? (onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`), rows.slice(1))
+      : rows;
+
     let pedimentosBuild = 0;
     let pedimentosInvalid = 0;
 
-    for (const row of rows) {
+    for (const row of dataRows) {
       if (row.length < 3) {
         // Row too short to extract pedimento components
         enrichedRows.push(['', ...row]);
