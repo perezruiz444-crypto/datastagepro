@@ -41,6 +41,12 @@ export const DESTINO_MERCANCIA: Record<string, string> = {
   '9': 'Interior del país',
 };
 
+/** Tipo de Guía (Índice 4 del 503) */
+export const TIPO_GUIA: Record<string, string> = {
+  'H': 'HOUSE',
+  'M': 'MASTER',
+};
+
 /**
  * Formatea una fecha de YYYYMMDD a DD/MM/YYYY.
  * Si el formato no es válido, retorna el valor original.
