@@ -37,7 +37,7 @@ export const MONTH_NAMES = [
 export const PEDIMENTO_REGEX = /^\d{2}-\d{3}-\d{4}-\d{7}$/;
 
 // Archivos a nivel pedimento (relación por Patente + Índice + Sección)
-export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', '507', '508', '509', '510', '511', '512', '520', '701', '702'];
+export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', '507', '508', '509', '510', '511', '512', '520', '701', '702', 'Inci'];
 
 // Archivos a nivel partida (relación por Patente + Índice + Sección + Fracción + Secuencia)
 export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
