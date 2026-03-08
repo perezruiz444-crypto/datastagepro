@@ -366,6 +366,36 @@ const transform511Row = (row: string[], lookup501: Map<string, Context501>): str
  * Transforma una fila cruda del archivo 512 en la fila de salida de 13 columnas.
  * Construye dos llaves: Pedimento (llave A) y Pedimento original (llave B).
  */
+/**
+ * Transforma una fila cruda del archivo 520 en la fila de salida de 9 columnas.
+ * Construye dirección concatenando múltiples campos.
+ */
+const transform520Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(11);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  // Dirección: idx 5 (Calle) + idx 7 (NumExt) + idx 6 (NumInt) + idx 8 (CP) + idx 9 (Municipio) + idx 10 (País)
+  const direccion = [get(5), get(7), get(6), get(8), get(9), get(10)]
+    .filter(Boolean).join(' ');
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago
+    get(3),                        // Identificación fiscal del destinatario
+    get(4),                        // Nombre del destinatario de la mercancía
+    direccion,                     // Dirección Destinatario
+  ];
+};
+
 const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
 
