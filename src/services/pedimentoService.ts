@@ -607,6 +607,37 @@ const transform555Row = (row: string[], lookup501: Map<string, Context501>): str
 
 /**
  * Construye lookup de contexto desde la tabla 501 ya enriquecida.
+
+/**
+ * Transforma una fila cruda del archivo 556 en la fila de salida de 13 columnas.
+ * Tasas de la Partida. Campos idx 5 y idx 7 duplicados (clave + descripción cruda).
+ */
+const transform556Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(8);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave de Pedimento (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
+    get(3),                        // Fracción arancelaria
+    get(4),                        // Secuencia de la fracción arancelaria
+    get(5),                        // Clave de contribución
+    get(5),                        // Descripción de la contribución (valor crudo, sin catálogo)
+    get(6),                        // Tasa de la contribución
+    get(7),                        // Clave de tipo de la tasa
+    get(7),                        // Descripción de la tasa (valor crudo, sin catálogo)
+  ];
+};
+
  */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
