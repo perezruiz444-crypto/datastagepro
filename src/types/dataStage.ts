@@ -31,3 +31,8 @@ export interface KpiCardProps {
   icon: React.ReactNode;
   color: string;
 }
+
+export interface ValidationWarning {
+  message: string;
+  severity: 'warning' | 'error';
+}
