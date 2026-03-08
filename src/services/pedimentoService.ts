@@ -479,6 +479,37 @@ const transform552Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
+/**
+ * Transforma una fila cruda del archivo 553 en la fila de salida de 14 columnas.
+ * Todos los campos se mantienen como texto. Descripción del permiso = valor crudo de idx 5.
+ */
+const transform553Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(10);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave de Pedimento (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
+    get(3),                        // Fracción arancelaria
+    get(4),                        // Secuencia de la fracción arancelaria
+    get(5),                        // Clave del permiso
+    get(5),                        // Descripción del permiso (valor crudo, sin catálogo)
+    get(6),                        // Firma de descargo
+    get(7),                        // Número del permiso
+    get(8),                        // Valor comercial en dólares
+    get(9),                        // Cantidad de mercancía en unidades de medida de la tarifa
+  ];
+};
+
 const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
 
