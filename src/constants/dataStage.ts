@@ -396,9 +396,17 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Patente Anterior',
   ],
   '702': [
-    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
-    'Clave Contribución', 'Forma Pago Anterior', 'Importe Anterior',
-    'Forma Pago Nuevo', 'Importe Nuevo', 'Fecha Pago',
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave',
+    'Tipo de Pedimento',
+    'Fecha de pago real',
+    'Clave de contribución',
+    'Descripción de la contribución',
+    'Clave de forma de pago',
+    'Descripción forma de pago',
+    'Importe del pago',
   ],
 };
 
