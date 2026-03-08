@@ -38,7 +38,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
   const totalFiles = processedFiles.length;
   
   // Data now includes header row from enrichment, so subtract 1 for record count
-  const hasHeaders = reportMode !== ReportMode.HISTORICAL;
+  const hasHeaders = reportMode !== ReportMode.CONSOLIDATED_TABLE;
   const totalRecords = Object.values(data).reduce(
     (acc, records) => acc + (records.length > (hasHeaders ? 1 : 0) ? records.length - (hasHeaders ? 1 : 0) : 0), 0
   );
