@@ -5,6 +5,7 @@ import {
   TIPO_PEDIMENTO,
   MEDIO_TRANSPORTE,
   DESTINO_MERCANCIA,
+  TIPO_GUIA,
   formatDateYYYYMMDD,
   extractYearFromDateField,
 } from '@/constants/catalogs';
@@ -107,6 +108,30 @@ const transform502Row = (row: string[], lookup501: Map<string, Context501>): str
     get(5),                        // Nombre del transportista
     get(6),                        // Clave de país del transporte
     get(7),                        // Identificador del transporte
+  ];
+};
+
+/**
+ * Transforma una fila cruda del archivo 503 en la fila de salida de 8 columnas.
+ */
+const transform503Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(5);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '' };
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago
+    get(3),                        // Número de guía o manifiesto
+    TIPO_GUIA[get(4)] || get(4),   // Clave de tipo de guía (H→HOUSE, M→MASTER)
   ];
 };
 
@@ -215,6 +240,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 502: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '503') {
+      const headers = COLUMN_HEADERS['503'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform503Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 503: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 

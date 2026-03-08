@@ -95,8 +95,14 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Identificador del transporte',
   ],
   '503': [
-    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
-    'Tipo Guía', 'Número Guía', 'Fecha Pago',
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave',
+    'Tipo de Pedimento',
+    'Fecha de pago',
+    'Número de guía o manifiesto',
+    'Clave de tipo de guía',
   ],
   '504': [
     'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
