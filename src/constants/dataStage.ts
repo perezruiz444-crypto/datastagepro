@@ -427,6 +427,15 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Fecha de Selección',
     'Patente Original Cruda',
   ],
+  'Resumen': [
+    'Folio de Extracción',
+    'RFC o Patente Consultada',
+    'Fecha Inicial de Consulta',
+    'Fecha Final de Consulta',
+    'Fecha de Ejecución del SAT',
+    'Total de Fracciones Extraídas',
+    'Total de Contribuciones Extraídas',
+  ],
 };
 
 /**

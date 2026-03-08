@@ -1418,8 +1418,11 @@ export const validateProcessedData = (
     onLog(`⚠️ ${w}`);
   }
 
+  const NO_PEDIMENTO_FILES = new Set(['Resumen']);
+
   for (const [fileKey, rows] of Object.entries(data)) {
     if (rows.length <= 1) continue;
+    if (NO_PEDIMENTO_FILES.has(fileKey)) continue;
 
     let invalidCount = 0;
     let emptyCount = 0;
