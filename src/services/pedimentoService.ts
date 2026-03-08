@@ -677,6 +677,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    if (fileKey === '512') {
+      const headers = COLUMN_HEADERS['512'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform512Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 512: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     const sampleColCount = rows[0].length + 1;
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
     const enrichedRows: string[][] = [headers];
