@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
 import { FileArchive, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const TOOL_URL = "https://aistudio.google.com/apps/a4fded63-c3df-497c-a6d8-e5fa6cef3cc1?showAssistant=true&showCode=true";
+import { Link } from "react-router-dom";
 
 const Hero = () => (
   <section className="relative overflow-hidden py-24 md:py-36">
