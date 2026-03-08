@@ -900,26 +900,7 @@ export const enrichWithPedimentoUnificado = (
           enrichedRows.push(transform552Row(row, context501));
           validCount++;
         } catch (e) { invalidCount++; }
-    }
-
-    if (fileKey === '554') {
-      const headers = COLUMN_HEADERS['554'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform554Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
       }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 554: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 552: ${validCount} registros transformados (${invalidCount} inválidos)`);
@@ -942,6 +923,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 553: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '554') {
+      const headers = COLUMN_HEADERS['554'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform554Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 554: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
