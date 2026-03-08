@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { FileArchive, ArrowRight, X, Sparkles } from 'lucide-react';
+import { FileArchive, ArrowRight, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { detectPeriodFromZipFile } from '@/services/fileService';
 
 interface UploadSectionProps {
