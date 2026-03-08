@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppState, ReportMode, ProgressState, ProcessedData } from '@/types/dataStage';
 import { MONTH_NAMES } from '@/constants/dataStage';
-import { processZipFile, consolidateAnnualData, mergeExcelFiles } from '@/services/fileService';
+import { processZipFile, consolidateAnnualData, processHistoricalData } from '@/services/fileService';
 import { UploadSection } from '@/components/processor/UploadSection';
 import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
