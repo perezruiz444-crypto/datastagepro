@@ -808,6 +808,24 @@ const transformInciRow = (row: string[]): string[] => {
   ];
 };
 
+/**
+ * Transforma una fila cruda del archivo Resumen en 7 columnas.
+ * Sin llave Pedimento, sin JOIN con 501.
+ */
+const transformResumenRow = (row: string[]): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  return [
+    get(0),                            // Folio de Extracción
+    get(1),                            // RFC o Patente Consultada
+    formatDateYYYYMMDD(get(2)),        // Fecha Inicial de Consulta
+    formatDateYYYYMMDD(get(3)),        // Fecha Final de Consulta
+    formatDateYYYYMMDD(get(4)),        // Fecha de Ejecución del SAT
+    get(5),                            // Total de Fracciones Extraídas
+    get(6),                            // Total de Contribuciones Extraídas
+  ];
+};
+
 /** Construye el mapa de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
