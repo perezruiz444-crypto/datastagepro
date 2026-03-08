@@ -229,8 +229,15 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Cantidad de mercancía descargada',
   ],
   '520': [
-    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
-    'País Destinatario', 'Fecha Pago',
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave',
+    'Tipo de Pedimento',
+    'Fecha de pago',
+    'Identificación fiscal del destinatario',
+    'Nombre del destinatario de la mercancía',
+    'Dirección Destinatario',
   ],
   '551': [
     'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
