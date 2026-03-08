@@ -122,7 +122,7 @@ const transform503Row = (row: string[], lookup501: Map<string, Context501>): str
   const yy = extractYearFromDateField(fechaPago);
   const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
 
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '' };
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
 
   return [
     pedimento,
