@@ -82,6 +82,7 @@ interface Context501 {
   tipoOperacion: string;
   clave: string;
   tipoPedimento: string;
+  fechaRecepcion: string;
 }
 
 /**
@@ -94,7 +95,7 @@ const transform502Row = (row: string[], lookup501: Map<string, Context501>): str
   const yy = extractYearFromDateField(fechaPago);
   const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
 
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '' };
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
 
   return [
     pedimento,
@@ -121,7 +122,7 @@ const transform503Row = (row: string[], lookup501: Map<string, Context501>): str
   const yy = extractYearFromDateField(fechaPago);
   const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
 
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '' };
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
 
   return [
     pedimento,
@@ -145,7 +146,7 @@ const transform504Row = (row: string[], lookup501: Map<string, Context501>): str
   const yy = extractYearFromDateField(fechaPago);
   const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
 
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '' };
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
 
   return [
     pedimento,
@@ -161,6 +162,43 @@ const transform504Row = (row: string[], lookup501: Map<string, Context501>): str
 };
 
 /**
+ * Transforma una fila cruda del archivo 505 en la fila de salida de 17 columnas.
+ */
+const transform505Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(18);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  // Dirección: concatenar idx 13 + 15 + 14 + 17 + 10 + 16 (filter nulls)
+  const direccion = [get(13), get(15), get(14), get(17), get(10), get(16)]
+    .filter(Boolean).join(' ');
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    ctx.fechaRecepcion,            // Fecha de recepción de pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago
+    get(4),                        // Número de la factura
+    formatDateYYYYMMDD(get(3)),    // Fecha de facturación
+    get(5),                        // Clave de término de facturación
+    get(7),                        // Valor en dólares
+    get(6),                        // Clave de moneda de facturación
+    get(8),                        // Valor en moneda extranjera
+    get(9),                        // Clave de país de facturación
+    get(12),                       // Proveedor de la mercancía
+    get(11),                       // Identificación fiscal del proveedor
+    direccion,                     // Dirección
+  ];
+};
+
+/**
  * Construye lookup de contexto desde la tabla 501 ya enriquecida.
  */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
@@ -172,6 +210,7 @@ const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501>
         tipoOperacion: row[2] || '',
         clave: row[3] || '',
         tipoPedimento: row[4] || '',
+        fechaRecepcion: row[5] || '',
       });
     }
   }
@@ -306,7 +345,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
-    // === LEGACY: prepend Pedimento Unificado for other tables ===
+    if (fileKey === '505') {
+      const headers = COLUMN_HEADERS['505'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform505Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 505: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     const sampleColCount = rows[0].length + 1;
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
     const enrichedRows: string[][] = [headers];
