@@ -408,6 +408,7 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    const sampleColCount = rows[0].length + 1;
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
     const enrichedRows: string[][] = [headers];
 
