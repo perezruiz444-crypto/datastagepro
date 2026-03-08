@@ -31,3 +31,132 @@ export const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+
+// Regex para validar formato de pedimento unificado: AA-AAA-AAAA-AAAAAAA
+export const PEDIMENTO_REGEX = /^\d{2}-\d{3}-\d{4}-\d{7}$/;
+
+// Archivos a nivel pedimento (relación por Patente + Índice + Sección)
+export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', '507', '508', '509', '510', '511', '512', '520', '701', '702'];
+
+// Archivos a nivel partida (relación por Patente + Índice + Sección + Fracción + Secuencia)
+export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
+
+/**
+ * Encabezados oficiales por archivo, basados en "Descripción de Campos" de la ANAM.
+ * La primera columna "Pedimento" se agrega automáticamente por el enriquecimiento.
+ * Los campos corresponden a las columnas del archivo .asc original (pipe-delimited).
+ * Ref: https://www.anam.gob.mx/wp-content/uploads/2022/08/Descripcion-de-Campos-1.pdf
+ */
+export const COLUMN_HEADERS: Record<string, string[]> = {
+  '501': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Tipo Operación', 'Clave Documento', 'Aduana Entrada/Salida',
+    'Tipo Cambio', 'Total Fletes', 'Total Seguros', 'Total Embalajes',
+    'Total Incrementables', 'Total Deducibles', 'Peso Bruto',
+    'Medio Transp. Salida', 'Medio Transp. Arribo', 'Medio Transp. Entrada/Salida',
+    'Destino Mercancía', 'Tipo Pedimento', 'Fecha Pago',
+  ],
+  '502': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Identificador Transporte', 'País Transporte', 'Fecha Pago',
+  ],
+  '503': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Tipo Guía', 'Número Guía', 'Fecha Pago',
+  ],
+  '504': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Tipo Contenedor', 'Número Contenedor', 'Fecha Pago',
+  ],
+  '505': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fecha Facturación', 'Término Facturación', 'Moneda Facturación',
+    'Valor Dólares', 'Valor Moneda Extranjera', 'País Facturación',
+    'Entidad Federativa Facturación', 'Fecha Pago',
+  ],
+  '506': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Tipo Fecha', 'Fecha Operación', 'Fecha Pago',
+  ],
+  '507': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Clave Caso', 'Identificador Caso', 'Fecha Pago',
+  ],
+  '509': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Clave Contribución', 'Tasa Contribución', 'Tipo Tasa', 'Fecha Pago',
+  ],
+  '510': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Clave Contribución', 'Forma Pago', 'Importe Pago', 'Fecha Pago',
+  ],
+  '512': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Patente Original', 'Índice Original', 'Sección Original',
+    'Clave Doc. Original', 'Fecha Op. Original', 'Fracción Original',
+    'Unidad Medida Original', 'Cantidad Descargada', 'Fecha Pago',
+  ],
+  '520': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'País Destinatario', 'Fecha Pago',
+  ],
+  '551': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Subdivisión',
+    'Descripción Mercancía', 'Precio Unitario', 'Valor Aduana',
+    'Valor Comercial', 'Valor Dólares',
+    'Cant. Unidad Comercial', 'Unidad Medida Comercial',
+    'Cant. Unidad Tarifa', 'Unidad Medida Tarifa',
+    'Valor Agregado', 'Vinculación', 'Método Valoración',
+    'Código Mercancía', 'Marca', 'Modelo',
+    'País Origen/Destino', 'País Comprador/Vendedor',
+    'Entidad Origen', 'Entidad Destino',
+    'Entidad Comprador', 'Entidad Vendedor', 'Fecha Pago',
+  ],
+  '552': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Kilometraje', 'Fecha Pago',
+  ],
+  '553': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Clave Permiso',
+    'Valor Comercial Dólares', 'Cant. Unidad Tarifa', 'Fecha Pago',
+  ],
+  '554': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Clave Caso',
+    'Identificador Caso', 'Fecha Pago',
+  ],
+  '556': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Clave Contribución',
+    'Tasa Contribución', 'Tipo Tasa', 'Fecha Pago',
+  ],
+  '557': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Fracción Arancelaria', 'Secuencia', 'Clave Contribución',
+    'Forma Pago', 'Importe Pago', 'Fecha Pago',
+  ],
+  '701': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Patente Rectificada', 'Núm. Ped. Rectificado', 'Sección Rectificada',
+    'Clave Documento Rectificado', 'Fecha Pago',
+  ],
+  '702': [
+    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
+    'Clave Contribución', 'Forma Pago Anterior', 'Importe Anterior',
+    'Forma Pago Nuevo', 'Importe Nuevo', 'Fecha Pago',
+  ],
+};
+
+/**
+ * Genera encabezados genéricos para archivos sin definición oficial.
+ * Siempre incluye "Pedimento" como primer campo.
+ */
+export const generateFallbackHeaders = (columnCount: number, fileKey: string): string[] => {
+  const headers = ['Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera'];
+  for (let i = 4; i < columnCount; i++) {
+    headers.push(`Campo ${i - 3}`);
+  }
+  return headers;
+};
