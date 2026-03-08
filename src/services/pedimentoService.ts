@@ -363,6 +363,42 @@ const transform511Row = (row: string[], lookup501: Map<string, Context501>): str
 };
 
 /**
+ * Transforma una fila cruda del archivo 512 en la fila de salida de 13 columnas.
+ * Construye dos llaves: Pedimento (llave A) y Pedimento original (llave B).
+ */
+const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  // Llave A: Pedimento — año desde idx 12
+  const fechaPago = get(12);
+  const yyA = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yyA);
+
+  // Llave B: Pedimento original — año desde idx 7
+  const fechaOpOrig = get(7);
+  const yyB = extractYearFromDateField(fechaOpOrig);
+  const pedimentoOriginal = buildPedimentoUnificado(get(3), get(4), get(5), yyB);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,                          // Pedimento (Llave A)
+    get(2),                             // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,                  // Tipo de Operación (desde 501)
+    ctx.clave,                          // Clave (desde 501)
+    ctx.tipoPedimento,                  // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago),      // Fecha de pago
+    pedimentoOriginal,                  // Pedimento original (Llave B)
+    get(6),                             // Clave de pedimento original
+    formatDateYYYYMMDD(fechaOpOrig),    // Fecha de la operación original
+    get(8),                             // Fracción arancelaria original
+    get(9),                             // Clave de unidad de medida original
+    get(9),                             // Unidad de medida original (valor crudo, sin catálogo)
+    get(10),                            // Cantidad de mercancía descargada
+  ];
+};
+
+/**
  * Construye lookup de contexto desde la tabla 501 ya enriquecida.
  */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
@@ -638,6 +674,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 511: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '512') {
+      const headers = COLUMN_HEADERS['512'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform512Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 512: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
