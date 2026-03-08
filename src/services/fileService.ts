@@ -10,28 +10,49 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
   try {
     const zip = await JSZip.loadAsync(file);
     const ascFiles = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.asc'));
-    const file501 = ascFiles.find(name => name.includes('501'));
-    if (!file501) return { month: null, year: null };
+    if (ascFiles.length === 0) return { month: null, year: null };
 
-    const content = await zip.file(file501)!.async('string');
-    const lines = content.split(/\r?\n/).slice(0, 100);
+    // Try 501 first, then any other .asc file
+    const file501 = ascFiles.find(name => name.includes('501'));
+    const targetFiles = file501 ? [file501, ...ascFiles.filter(f => f !== file501)] : ascFiles;
 
     const monthCounts: Record<number, number> = {};
     const yearCounts: Record<number, number> = {};
-    lines.forEach(line => {
-      const parts = line.split('|');
-      parts.forEach(field => {
-        const trimmed = field.trim();
-        if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-          const yr = parseInt(trimmed.substring(0, 4), 10);
-          const month = parseInt(trimmed.substring(4, 6), 10);
-          if (month >= 1 && month <= 12 && yr >= 2000 && yr <= 2099) {
-            monthCounts[month] = (monthCounts[month] || 0) + 1;
-            yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+
+    for (const ascFileName of targetFiles.slice(0, 5)) {
+      const content = await zip.file(ascFileName)!.async('string');
+      const lines = content.split(/\r?\n/).slice(0, 200);
+
+      lines.forEach(line => {
+        const parts = line.split('|');
+        parts.forEach(field => {
+          const trimmed = field.trim();
+          // YYYYMMDD format
+          if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
+            const yr = parseInt(trimmed.substring(0, 4), 10);
+            const mo = parseInt(trimmed.substring(4, 6), 10);
+            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
+              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+            }
           }
-        }
+          // DD/MM/YYYY or DD-MM-YYYY format
+          const dateMatch = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+          if (dateMatch) {
+            const mo = parseInt(dateMatch[2], 10);
+            const yr = parseInt(dateMatch[3], 10);
+            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
+              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+            }
+          }
+        });
       });
-    });
+
+      // If we already have enough data, stop scanning more files
+      const totalCounts = Object.values(monthCounts).reduce((a, b) => a + b, 0);
+      if (totalCounts >= 20) break;
+    }
 
     let maxMonthCount = 0, detectedMonth: number | null = null;
     for (const [m, count] of Object.entries(monthCounts)) {
