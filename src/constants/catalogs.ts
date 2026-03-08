@@ -83,55 +83,24 @@ export const formatDateYYYYMMDD = (value: string): string => {
  */
 export const extractYearFromDateField = (value: string): string => {
   const trimmed = value.trim();
-  let result = '00';
 
-  // YYYYMMDD → year = primeros 4 caracteres
+  // YYYYMMDD (e.g. "20241015") → año = "2024" → "24"
   if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-    result = trimmed.substring(0, 4).slice(-2);
-  }
-  // YYYY-MM-DD
-  else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    result = trimmed.substring(0, 4).slice(-2);
-  }
-  // DD/MM/YYYY o DD-MM-YYYY
-  else {
-    const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})$/);
-    if (dmyMatch) {
-      result = dmyMatch[1].slice(-2);
-    }
+    return trimmed.substring(0, 4).slice(-2);
   }
 
-  // Debug: log primeros 5 valores para verificar
-  if (!extractYearFromDateField._logged) extractYearFromDateField._logged = 0;
-  if (extractYearFromDateField._logged < 5) {
-    console.log(`[extractYear] input="${trimmed}" → year="${result}"`);
-    extractYearFromDateField._logged++;
-  }
-
-  return result;
-};
-// Propiedad para limitar logs
-(extractYearFromDateField as any)._logged = 0;
-  const trimmed = value.trim();
-
-  // YYYYMMDD → year = primeros 4 caracteres
-  if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-    const year = trimmed.substring(0, 4);
-    return year.substring(2, 4);
-  }
-
-  // YYYY-MM-DD → year = primeros 4 caracteres
+  // YYYY-MM-DD (e.g. "2024-10-15") → año = "2024" → "24"
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const year = trimmed.substring(0, 4);
-    return year.substring(2, 4);
+    return trimmed.substring(0, 4).slice(-2);
   }
 
-  // DD/MM/YYYY o DD-MM-YYYY → year = últimos 4 caracteres
+  // DD/MM/YYYY o DD-MM-YYYY (e.g. "15/10/2024") → año = "2024" → "24"
   const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})$/);
   if (dmyMatch) {
-    const year = dmyMatch[1];
-    return year.substring(2, 4);
+    return dmyMatch[1].slice(-2);
   }
 
+  // Debug: log valores no reconocidos
+  console.warn(`[extractYear] Formato no reconocido: "${trimmed}"`);
   return '00';
 };
