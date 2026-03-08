@@ -159,41 +159,62 @@ export const enrichWithPedimentoUnificado = (
   }
   onLog(`📋 Año detectado para Pedimento Unificado: ${detectedYear}`);
 
+  // === PHASE 1: Process 501 first (needed for context injection) ===
+  if (data['501']) {
+    const rows = data['501'];
+    const dataRows = rows.length > 0 && rows[0].length >= 3 &&
+      (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
+      ? (onLog(`🔄 501: Encabezado original detectado y reemplazado`), rows.slice(1))
+      : rows;
+
+    const headers = COLUMN_HEADERS['501'];
+    const enrichedRows: string[][] = [headers];
+    let validCount = 0;
+    let invalidCount = 0;
+
+    for (const row of dataRows) {
+      if (row.length < 3) { invalidCount++; continue; }
+      try {
+        enrichedRows.push(transform501Row(row));
+        validCount++;
+      } catch (e) { invalidCount++; }
+    }
+
+    enrichedData['501'] = enrichedRows;
+    onLog(`✅ 501: ${validCount} registros transformados (${invalidCount} inválidos)`);
+  }
+
+  // Build context lookup from enriched 501
+  const context501 = enrichedData['501'] ? buildContext501Lookup(enrichedData['501']) : new Map<string, Context501>();
+
+  // === PHASE 2: Process all other tables ===
   for (const [fileKey, rows] of Object.entries(data)) {
-    if (rows.length === 0) {
-      enrichedData[fileKey] = rows;
+    if (fileKey === '501' || rows.length === 0) {
+      if (fileKey !== '501') enrichedData[fileKey] = rows;
       continue;
     }
 
-    // Detect if first row is a header (non-numeric patente)
     const dataRows = rows.length > 0 && rows[0].length >= 3 &&
       (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
       ? (onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`), rows.slice(1))
       : rows;
 
-    if (fileKey === '501') {
-      // === NEW: Index-based mapping for 501 ===
-      const headers = COLUMN_HEADERS['501'];
+    if (fileKey === '502') {
+      const headers = COLUMN_HEADERS['502'];
       const enrichedRows: string[][] = [headers];
       let validCount = 0;
       let invalidCount = 0;
 
       for (const row of dataRows) {
-        if (row.length < 3) {
-          invalidCount++;
-          continue;
-        }
+        if (row.length < 3) { invalidCount++; continue; }
         try {
-          const transformed = transform501Row(row);
-          enrichedRows.push(transformed);
+          enrichedRows.push(transform502Row(row, context501));
           validCount++;
-        } catch (e) {
-          invalidCount++;
-        }
+        } catch (e) { invalidCount++; }
       }
 
       enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 501: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      onLog(`✅ 502: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
