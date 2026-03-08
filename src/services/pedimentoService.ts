@@ -638,7 +638,7 @@ const transform556Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
-/**
+/** Construye el mapa de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
   for (let i = 1; i < enriched501.length; i++) {
