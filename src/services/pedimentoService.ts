@@ -742,6 +742,39 @@ const transform701Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
+/**
+ * Tabla 702 – Diferencias de Contribuciones a Nivel Pedimento.
+ * Pedimento: AA(año idx7)-AAA(idx2)-AAAA(idx0)-AAAAAAA(idx1).
+ * JOIN con 501: Tipo de Operación y Clave.
+ * Tipo de Pedimento viene del propio archivo (idx 6).
+ * Descripción de contribución y forma de pago = valor crudo (sin catálogo).
+ */
+const transform702Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  // Pedimento: año desde idx 7 (FechaPagoReal)
+  const fechaPagoReal = get(7);
+  const yy = extractYearFromDateField(fechaPagoReal);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  // JOIN con 501: solo Tipo de Operación y Clave
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,                              // Pedimento
+    get(2),                                 // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,                      // Tipo de Operación (desde 501)
+    ctx.clave,                              // Clave (desde 501)
+    get(6),                                 // Tipo de Pedimento (del propio archivo)
+    formatDateYYYYMMDD(fechaPagoReal),      // Fecha de pago real
+    get(3),                                 // Clave de contribución
+    get(3),                                 // Descripción de la contribución (valor crudo)
+    get(4),                                 // Clave de forma de pago
+    get(4),                                 // Descripción forma de pago (valor crudo)
+    get(5),                                 // Importe del pago
+  ];
+};
+
 /** Construye el mapa de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
@@ -1206,6 +1239,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 701: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '702') {
+      const headers = COLUMN_HEADERS['702'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform702Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 702: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
