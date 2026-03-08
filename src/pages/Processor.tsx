@@ -11,7 +11,7 @@ import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
 import { AnnualUploadSection } from '@/components/processor/AnnualUploadSection';
 import { ConsolidatedTableUploadSection } from '@/components/processor/ConsolidatedTableUploadSection';
-import { MultiYearUploadSection } from '@/components/processor/MultiYearUploadSection';
+import { HistoricalUploadSection } from '@/components/processor/HistoricalUploadSection';
 import ThemeToggle from '@/components/landing/ThemeToggle';
 
 const Processor = () => {
