@@ -9,7 +9,7 @@ export enum ReportMode {
   MONTHLY = 'MONTHLY',
   ANNUAL = 'ANNUAL',
   CONSOLIDATED_TABLE = 'CONSOLIDATED_TABLE',
-  MULTI_YEAR = 'MULTI_YEAR',
+  HISTORICAL = 'HISTORICAL',
 }
 
 export enum ExportFormat {

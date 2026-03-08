@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppState, ReportMode, ProgressState, ProcessedData } from '@/types/dataStage';
 import { MONTH_NAMES } from '@/constants/dataStage';
-import { processZipFile, consolidateAnnualData, mergeExcelFiles } from '@/services/fileService';
+import { processZipFile, consolidateAnnualData, processHistoricalData } from '@/services/fileService';
 import { UploadSection } from '@/components/processor/UploadSection';
 import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
 import { AnnualUploadSection } from '@/components/processor/AnnualUploadSection';
 import { ConsolidatedTableUploadSection } from '@/components/processor/ConsolidatedTableUploadSection';
-import { MultiYearUploadSection } from '@/components/processor/MultiYearUploadSection';
+import { HistoricalUploadSection } from '@/components/processor/HistoricalUploadSection';
 import ThemeToggle from '@/components/landing/ThemeToggle';
 
 const Processor = () => {
@@ -140,20 +140,22 @@ const Processor = () => {
     }
   };
 
-  // Multi-year processing
-  const handleMultiYearProcess = async (files: File[]) => {
+  // Historical processing
+  const handleHistoricalProcess = async (files: File[]) => {
     setAppState(AppState.PROCESSING);
-    setReportTitle('Multi-Anual');
     cancellationSignal.current = { current: false };
 
     try {
-      const data = await mergeExcelFiles(files, addLog, setProgress);
+      const { data, yearRange } = await processHistoricalData(files, addLog, setProgress, cancellationSignal.current);
+      setReportTitle(`Histórico ${yearRange}`);
       setProcessedData(data);
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
-      setErrorMessage(msg);
-      setAppState(AppState.ERROR);
+      if (!msg.includes('cancelled')) {
+        setErrorMessage(msg);
+        setAppState(AppState.ERROR);
+      }
     }
   };
 
@@ -190,7 +192,7 @@ const Processor = () => {
                 <TabsTrigger value={ReportMode.MONTHLY}>Mensual</TabsTrigger>
                 <TabsTrigger value={ReportMode.ANNUAL}>Anual</TabsTrigger>
                 <TabsTrigger value={ReportMode.CONSOLIDATED_TABLE}>Consolidado por Tabla</TabsTrigger>
-                <TabsTrigger value={ReportMode.MULTI_YEAR}>Multi-Anual</TabsTrigger>
+                <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.MONTHLY}>
                 <UploadSection
@@ -217,8 +219,8 @@ const Processor = () => {
                   onProcess={handleConsolidatedTableProcess}
                 />
               </TabsContent>
-              <TabsContent value={ReportMode.MULTI_YEAR}>
-                <MultiYearUploadSection onProcess={handleMultiYearProcess} />
+              <TabsContent value={ReportMode.HISTORICAL}>
+                <HistoricalUploadSection onProcess={handleHistoricalProcess} />
               </TabsContent>
             </Tabs>
           </div>

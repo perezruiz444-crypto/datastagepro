@@ -186,50 +186,71 @@ export const consolidateAnnualData = (
   return consolidated;
 };
 
-export const mergeExcelFiles = async (
+export const processHistoricalData = async (
   files: File[],
   onLog: (msg: string) => void,
-  onProgress: (prog: ProgressState) => void
-): Promise<ProcessedData> => {
-  const consolidated: ProcessedData = {};
-  const totalFiles = files.length;
-  const filesWith558: string[] = [];
+  onProgress: (prog: ProgressState) => void,
+  cancellationSignal: { current: boolean }
+): Promise<{ data: ProcessedData; yearRange: string }> => {
+  const allMonthlyData: { month: string; year: number; data: ProcessedData }[] = [];
 
-  for (let i = 0; i < totalFiles; i++) {
+  for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    onLog(`Leyendo archivo Excel: ${file.name}...`);
-    onProgress({ total: Math.round((i / totalFiles) * 100), file: 0, fileName: file.name });
+    onLog(`--- [${i + 1}/${files.length}] Procesando ZIP: ${file.name} ---`);
+    onProgress({ total: Math.round((i / files.length) * 100), file: 0, fileName: file.name });
 
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
+    // Auto-detect period
+    const { month, year } = await detectPeriodFromZipFile(file);
+    const detectedMonth = month || 'Desconocido';
+    const detectedYear = year || new Date().getFullYear();
+    onLog(`Periodo detectado: ${detectedMonth} ${detectedYear}`);
 
-    let has558 = false;
-
-    workbook.SheetNames.forEach((sheetName: string) => {
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-      if (jsonData.length === 0) return;
-
-      const stringData: string[][] = jsonData.map((row: any[]) => row.map((cell: any) => String(cell).trim()));
-
-      const fileId = sheetName.split(' - ')[0].trim() || sheetName.trim();
-
-      if (fileId === '558') has558 = true;
-
-      if (!consolidated[fileId]) {
-        consolidated[fileId] = stringData;
-      } else {
-        consolidated[fileId].push(...stringData.slice(1));
-      }
-    });
-
-    if (has558) filesWith558.push(file.name);
-    onProgress({ total: Math.round(((i + 1) / totalFiles) * 100), file: 100, fileName: file.name });
+    // Process ZIP with full transformations
+    const data = await processZipFile(file, onLog, onProgress, cancellationSignal, detectedYear);
+    allMonthlyData.push({ month: detectedMonth, year: detectedYear, data });
   }
 
-  onLog(`Fusión completada. Hojas consolidadas: ${Object.keys(consolidated).join(', ')}`);
-  return consolidated;
+  // Sort by year then month
+  allMonthlyData.sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return MONTH_NAMES.indexOf(a.month) - MONTH_NAMES.indexOf(b.month);
+  });
+
+  // Consolidate all tables
+  const consolidated: ProcessedData = {};
+  const allFileKeys = new Set<string>();
+  allMonthlyData.forEach(({ data }) => Object.keys(data).forEach(k => allFileKeys.add(k)));
+
+  onLog(`Consolidando ${allFileKeys.size} tipos de tabla en histórico...`);
+
+  allMonthlyData.forEach(({ month, year, data }) => {
+    Object.entries(data).forEach(([fileKey, records]) => {
+      if (!consolidated[fileKey]) {
+        consolidated[fileKey] = [];
+        if (records.length > 0) {
+          const header = [...records[0]];
+          header.splice(1, 0, 'Año', 'Mes');
+          consolidated[fileKey].push(header);
+        }
+      }
+      const dataRows = records.slice(1);
+      const enrichedRows = dataRows.map(row => {
+        const r = [...row];
+        r.splice(1, 0, String(year), month);
+        return r;
+      });
+      consolidated[fileKey].push(...enrichedRows);
+    });
+  });
+
+  // Determine year range
+  const years = allMonthlyData.map(d => d.year);
+  const minYear = Math.min(...years);
+  const maxYear = Math.max(...years);
+  const yearRange = minYear === maxYear ? `${minYear}` : `${minYear}-${maxYear}`;
+
+  onLog(`✅ Histórico generado: ${Object.keys(consolidated).length} tablas, rango ${yearRange}`);
+  return { data: consolidated, yearRange };
 };
 
 const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
@@ -291,8 +312,8 @@ export const generateSeparateSheetsExcelReport = (
     let fileName = `Reporte_Consolidado_${title.replace(/\s/g, '_')}_${year}.xlsx`;
     if (reportMode === ReportMode.MONTHLY) {
       fileName = `Data Stage ${title} ${year}.xlsx`;
-    } else if (reportMode === ReportMode.MULTI_YEAR) {
-      fileName = `Data_Stage_MultiAnual_${new Date().getTime()}.xlsx`;
+    } else if (reportMode === ReportMode.HISTORICAL) {
+      fileName = `Data_Stage_Historico_${title.replace(/\s/g, '_')}.xlsx`;
     }
 
     const link = document.createElement('a');
