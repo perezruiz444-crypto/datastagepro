@@ -18,7 +18,7 @@ interface HistoricalUploadSectionProps {
   onProcess: (fileType: string, files: { file: File; label: string }[]) => void;
 }
 
-export const HistoricalUploadSection: React.FC<HistoricalUploadSectionProps> = ({
+export const ConsolidatedTableUploadSection: React.FC<HistoricalUploadSectionProps> = ({
   selectedYear, onYearChange, onProcess,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
