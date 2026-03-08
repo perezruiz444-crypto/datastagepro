@@ -23,6 +23,7 @@ export const FILE_NAMES: Record<string, string> = {
   '558': '558 - Observaciones partida',
   '701': '701 - Rectificaciones',
   '702': '702 - Diferencias contrib',
+  'Inci': 'Inci - Incidencias / Reconocimiento',
 };
 
 export const CRITICAL_FILES = ['501', '551'];
@@ -36,7 +37,7 @@ export const MONTH_NAMES = [
 export const PEDIMENTO_REGEX = /^\d{2}-\d{3}-\d{4}-\d{7}$/;
 
 // Archivos a nivel pedimento (relación por Patente + Índice + Sección)
-export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', '507', '508', '509', '510', '511', '512', '520', '701', '702'];
+export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', '507', '508', '509', '510', '511', '512', '520', '701', '702', 'Inci'];
 
 // Archivos a nivel partida (relación por Patente + Índice + Sección + Fracción + Secuencia)
 export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
@@ -407,6 +408,23 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Clave de forma de pago',
     'Descripción forma de pago',
     'Importe del pago',
+  ],
+  'Inci': [
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave de Documento',
+    'Consecutivo de Remesa',
+    'Número de Selección',
+    'Fecha Inicio Reconocimiento',
+    'Hora Inicio Reconocimiento',
+    'Fecha Fin Reconocimiento',
+    'Hora Fin Reconocimiento',
+    'Fracción Arancelaria',
+    'Secuencia de la Fracción',
+    'Grado de Incidencia',
+    'Fecha de Selección',
+    'Patente Original Cruda',
   ],
 };
 

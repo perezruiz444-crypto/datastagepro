@@ -775,6 +775,39 @@ const transform702Row = (row: string[], lookup501: Map<string, Context501>): str
   ];
 };
 
+/**
+ * Tabla Inci – Incidencias / Reconocimiento Aduanero.
+ * Sin FechaPagoReal: año extraído de FechaSeleccion (idx 14).
+ * Sin JOIN con 501: Tipo de Operación viene del propio archivo (idx 12).
+ * 15 columnas de salida. Horas preservadas como texto.
+ */
+const transformInciRow = (row: string[]): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  // Pedimento: año desde idx 14 (FechaSeleccion)
+  const fechaSeleccion = get(14);
+  const yy = extractYearFromDateField(fechaSeleccion);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  return [
+    pedimento,                              // Pedimento
+    get(2),                                 // Clave de sección aduanera de despacho
+    get(12),                                // Tipo de Operación
+    get(11),                                // Clave de Documento
+    get(3),                                 // Consecutivo de Remesa
+    get(4),                                 // Número de Selección
+    formatDateYYYYMMDD(get(5)),             // Fecha Inicio Reconocimiento
+    get(6),                                 // Hora Inicio Reconocimiento
+    formatDateYYYYMMDD(get(7)),             // Fecha Fin Reconocimiento
+    get(8),                                 // Hora Fin Reconocimiento
+    get(9),                                 // Fracción Arancelaria
+    get(10),                                // Secuencia de la Fracción
+    get(13),                                // Grado de Incidencia
+    formatDateYYYYMMDD(fechaSeleccion),     // Fecha de Selección
+    get(0),                                 // Patente Original Cruda
+  ];
+};
+
 /** Construye el mapa de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
@@ -1258,6 +1291,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 702: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === 'Inci') {
+      const headers = COLUMN_HEADERS['Inci'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transformInciRow(row));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ Inci: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
