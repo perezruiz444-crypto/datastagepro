@@ -682,7 +682,7 @@ const transform558Row = (row: string[], lookup501: Map<string, Context501>): str
   const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
 
   // Observaciones (idx 6): se preserva el valor crudo sin trim invasivo
-  const observaciones = idx < row.length ? row[6] : '';
+  const observaciones = 6 < row.length ? row[6] : '';
 
   return [
     pedimento,
