@@ -68,6 +68,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [detectedYears, setDetectedYears] = useState<Record<string, number>>({});
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   // Compute detected year from most frequent year across files
