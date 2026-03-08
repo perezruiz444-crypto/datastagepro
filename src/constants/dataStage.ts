@@ -24,6 +24,7 @@ export const FILE_NAMES: Record<string, string> = {
   '701': '701 - Rectificaciones',
   '702': '702 - Diferencias contrib',
   'Inci': 'Inci - Incidencias / Reconocimiento',
+  'Sel': 'Sel - Selección Automatizada / Semáforo Fiscal',
   'Resumen': 'Resumen - Control de Extracción',
 };
 
