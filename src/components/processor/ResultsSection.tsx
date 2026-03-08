@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings, AlertTriangle, Key } from 'lucide-react';
+import { CheckCircle, FileText, ListOrdered, FileSpreadsheet, FileArchive, Upload, Settings, AlertTriangle, Key, Pencil } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
@@ -31,6 +32,7 @@ const KpiCard: React.FC<{ title: string; value: number | string; icon: React.Rea
 
 export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, reportTitle, year, reportMode, warnings = [] }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.TEXT);
+  const [customFileName, setCustomFileName] = useState(reportTitle);
 
   const processedFiles = Object.keys(data);
   const totalFiles = processedFiles.length;
@@ -82,11 +84,20 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           </div>
         )}
 
-        {/* Export format toggle */}
+        {/* Export config */}
         <div className="p-4 bg-muted/50 border rounded-xl">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Settings className="h-4 w-4" /> Configuración de Exportación
           </h3>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap flex items-center gap-1"><Pencil className="h-3.5 w-3.5" /> Nombre del archivo:</span>
+            <Input
+              value={customFileName}
+              onChange={(e) => setCustomFileName(e.target.value)}
+              className="max-w-md"
+              placeholder="Nombre del archivo de salida"
+            />
+          </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <span className="text-sm font-medium text-muted-foreground">Formato de celdas:</span>
             <div className="flex bg-muted p-1 rounded-lg">
@@ -141,7 +152,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button
               size="lg"
-              onClick={() => generateSeparateSheetsExcelReport(data, reportTitle, year, reportMode, exportFormat)}
+              onClick={() => generateSeparateSheetsExcelReport(data, customFileName || reportTitle, year, reportMode, exportFormat)}
             >
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Reporte Consolidado
@@ -150,7 +161,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
               <Button
                 size="lg"
                 variant="secondary"
-                onClick={() => generateIndividualExcelFiles(data, reportTitle, year, reportMode, exportFormat)}
+                onClick={() => generateIndividualExcelFiles(data, customFileName || reportTitle, year, reportMode, exportFormat)}
               >
                 <FileArchive className="mr-2 h-4 w-4" />
                 Reportes Individuales (ZIP)
