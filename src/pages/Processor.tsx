@@ -70,12 +70,12 @@ const Processor = () => {
   };
 
   // Annual processing
-  const handleAnnualProcess = async () => {
+  const handleAnnualProcess = async (detectedYear: number) => {
     const filledMonths = Object.entries(annualFiles).filter(([, f]) => f !== null) as [string, File][];
     if (filledMonths.length === 0) return;
 
     setAppState(AppState.PROCESSING);
-    setReportTitle(`Anual ${selectedYear}`);
+    setReportTitle(`Anual ${detectedYear}`);
     cancellationSignal.current = { current: false };
 
     try {
@@ -84,7 +84,7 @@ const Processor = () => {
         const [month, file] = filledMonths[i];
         addLog(`--- Procesando mes: ${month} ---`);
         setProgress({ total: Math.round((i / filledMonths.length) * 100), file: 0, fileName: file.name });
-        const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, selectedYear);
+        const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, detectedYear);
         monthlyDataArray.push({ month, data });
       }
       const consolidated = consolidateAnnualData(monthlyDataArray, addLog);
@@ -198,8 +198,6 @@ const Processor = () => {
               </TabsContent>
               <TabsContent value={ReportMode.ANNUAL}>
                 <AnnualUploadSection
-                  selectedYear={selectedYear}
-                  onYearChange={(y) => setSelectedYear(parseInt(y, 10))}
                   files={annualFiles}
                   onFilesChange={setAnnualFiles}
                   onProcess={handleAnnualProcess}
