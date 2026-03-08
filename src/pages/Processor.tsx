@@ -140,20 +140,22 @@ const Processor = () => {
     }
   };
 
-  // Multi-year processing
-  const handleMultiYearProcess = async (files: File[]) => {
+  // Historical processing
+  const handleHistoricalProcess = async (files: File[]) => {
     setAppState(AppState.PROCESSING);
-    setReportTitle('Multi-Anual');
     cancellationSignal.current = { current: false };
 
     try {
-      const data = await mergeExcelFiles(files, addLog, setProgress);
+      const { data, yearRange } = await processHistoricalData(files, addLog, setProgress, cancellationSignal.current);
+      setReportTitle(`Histórico ${yearRange}`);
       setProcessedData(data);
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
-      setErrorMessage(msg);
-      setAppState(AppState.ERROR);
+      if (!msg.includes('cancelled')) {
+        setErrorMessage(msg);
+        setAppState(AppState.ERROR);
+      }
     }
   };
 
