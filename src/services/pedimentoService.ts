@@ -1,72 +1,111 @@
 import { ProcessedData } from '@/types/dataStage';
 import { COLUMN_HEADERS, PEDIMENTO_REGEX, generateFallbackHeaders } from '@/constants/dataStage';
+import {
+  TIPO_OPERACION,
+  TIPO_PEDIMENTO,
+  MEDIO_TRANSPORTE,
+  DESTINO_MERCANCIA,
+  formatDateYYYYMMDD,
+  extractYearFromDateField,
+} from '@/constants/catalogs';
 
 /**
  * Construye el Pedimento Unificado en formato AA-AAA-AAAA-AAAAAAA
- * AA = año (2 dígitos)
- * AAA = sección aduanera (3 dígitos) 
- * AAAA = patente (4 dígitos)
- * AAAAAAA = número de pedimento/índice (7 dígitos)
+ * AA = últimos 2 dígitos del año de Fecha de Pago (Índice 30)
+ * AAA = sección aduanera (Índice 2)
+ * AAAA = patente (Índice 0)
+ * AAAAAAA = número de pedimento (Índice 1)
  */
 export const buildPedimentoUnificado = (
   patente: string,
   indice: string,
   seccion: string,
-  year: number
+  yearTwoDigits: string
 ): string => {
-  const yy = String(year % 100).padStart(2, '0');
   const sec = seccion.padStart(3, '0');
   const pat = patente.padStart(4, '0');
   const idx = indice.padStart(7, '0');
-  return `${yy}-${sec}-${pat}-${idx}`;
+  return `${yearTwoDigits}-${sec}-${pat}-${idx}`;
 };
 
 /**
- * Intenta detectar el año a partir de un campo de fecha YYYYMMDD o DD/MM/YYYY en los datos del 501.
- * Si no puede, usa el año proporcionado como fallback.
+ * Transforma una fila cruda del archivo 501 en la fila de salida de 31 columnas.
+ * Mapeo estricto por índice de columna del .asc.
  */
-const detectYearFromData = (data501: string[][] | undefined, fallbackYear: number): number => {
-  if (!data501 || data501.length === 0) return fallbackYear;
+const transform501Row = (row: string[]): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
 
-  // Revisar las primeras filas del 501 buscando campos de fecha de 8 dígitos (YYYYMMDD)
-  for (let i = 0; i < Math.min(data501.length, 20); i++) {
-    const row = data501[i];
-    for (const field of row) {
-      const trimmed = field.trim();
-      if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-        const year = parseInt(trimmed.substring(0, 4), 10);
-        if (year >= 2010 && year <= 2099) {
-          return year;
+  // Construir Pedimento: AA(year de idx30)-AAA(idx2)-AAAA(idx0)-AAAAAAA(idx1)
+  const fechaPago = get(30);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  return [
+    pedimento,                                                      // Pedimento
+    get(2),                                                         // Clave de sección aduanera de despacho
+    TIPO_OPERACION[get(3)] || get(3),                               // Tipo de Operación
+    get(4),                                                         // Clave
+    TIPO_PEDIMENTO[get(28)] || get(28),                             // Tipo de Pedimento
+    formatDateYYYYMMDD(get(29)),                                    // Fecha de recepción de pedimento
+    formatDateYYYYMMDD(get(30)),                                    // Fecha de pago
+    get(9),                                                         // Tipo de cambio
+    get(10),                                                        // Fletes
+    get(11),                                                        // Seguros
+    get(12),                                                        // Embalajes
+    get(13),                                                        // Otros incrementales
+    get(14),                                                        // Otros deducibles
+    get(15),                                                        // Peso bruto de la mercancía
+    get(16),                                                        // Clave de medio de transporte de salida
+    MEDIO_TRANSPORTE[get(16)] || get(16),                           // Descripción medio transporte salida
+    get(17),                                                        // Clave de medio de transporte de arribo
+    MEDIO_TRANSPORTE[get(17)] || get(17),                           // Descripción medio transporte arribo
+    get(18),                                                        // Clave de medio de transporte entrada/salida
+    MEDIO_TRANSPORTE[get(18)] || get(18),                           // Descripción medio transporte entrada/salida
+    get(19),                                                        // Clave de destino de la mercancía
+    DESTINO_MERCANCIA[get(19)] || get(19),                          // Descripción destino mercancía
+    get(5),                                                         // Clave de sección aduanera de entrada
+    get(8),                                                         // CURP del agente o apoderado aduanal
+    get(20),                                                        // Nombre del contribuyente
+    [get(21), get(23), get(22), get(24), get(25), get(26), get(27)] // Dirección del contribuyente
+      .filter(Boolean).join(' '),
+    '0',                                                            // Transporte (Decrementables)
+    '0',                                                            // Seguro (Decrementables)
+    '0',                                                            // Carga (Decrementables)
+    '0',                                                            // Descarga (Decrementables)
+    '0',                                                            // Otros Decrementables
+  ];
+};
+
+/**
+ * Enriquece los datos procesados: aplica transformación por tabla y agrega encabezados.
+ * Para tabla 501: mapeo por índice con transformaciones especiales.
+ * Para otras tablas: lógica legacy (prepend Pedimento Unificado).
+ */
+export const enrichWithPedimentoUnificado = (
+  data: ProcessedData,
+  onLog: (message: string) => void
+): ProcessedData => {
+  const enrichedData: ProcessedData = {};
+
+  // Detect year from 501 for legacy tables that still need it
+  let detectedYear = 2020;
+  if (data['501'] && data['501'].length > 0) {
+    for (let i = 0; i < Math.min(data['501'].length, 20); i++) {
+      const row = data['501'][i];
+      if (row.length > 30) {
+        const fechaPago = row[30].trim();
+        if (fechaPago.length === 8 && /^\d{8}$/.test(fechaPago)) {
+          detectedYear = parseInt(fechaPago.substring(0, 4), 10);
+          break;
+        }
+        if (fechaPago.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(fechaPago)) {
+          detectedYear = parseInt(fechaPago.substring(0, 4), 10);
+          break;
         }
       }
     }
   }
-
-  return fallbackYear;
-};
-
-/**
- * Enriquece los datos procesados con la columna Pedimento Unificado y encabezados oficiales.
- * 
- * Para cada archivo:
- * 1. Prepende la columna "Pedimento" (YY-AAA-AAAA-AAAAAAA) construida desde cols 0,1,2
- * 2. Agrega fila de encabezados oficiales como primera fila
- * 
- * Estructura de cada archivo .asc (pipe-delimited):
- * - Col 0: Patente aduanal (4 chars)
- * - Col 1: Índice / Número de pedimento (7 chars) 
- * - Col 2: Clave de sección aduanera de despacho (3 chars)
- * - Col 3+: Campos específicos del archivo
- */
-export const enrichWithPedimentoUnificado = (
-  data: ProcessedData,
-  fallbackYear: number,
-  onLog: (message: string) => void
-): ProcessedData => {
-  const year = detectYearFromData(data['501'], fallbackYear);
-  onLog(`📋 Año detectado para Pedimento Unificado: ${year}`);
-
-  const enrichedData: ProcessedData = {};
+  onLog(`📋 Año detectado para Pedimento Unificado: ${detectedYear}`);
 
   for (const [fileKey, rows] of Object.entries(data)) {
     if (rows.length === 0) {
@@ -74,27 +113,48 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
-    // Determine column count (including the new Pedimento column)
-    const sampleColCount = rows[0].length + 1;
-
-    // Get official headers or generate fallback
-    const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
-
-    // Build enriched rows: prepend Pedimento Unificado
-    const enrichedRows: string[][] = [headers];
-
-    // Detect if first row is a raw header (non-numeric patente/indice/seccion)
+    // Detect if first row is a header (non-numeric patente)
     const dataRows = rows.length > 0 && rows[0].length >= 3 &&
       (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
       ? (onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`), rows.slice(1))
       : rows;
+
+    if (fileKey === '501') {
+      // === NEW: Index-based mapping for 501 ===
+      const headers = COLUMN_HEADERS['501'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) {
+          invalidCount++;
+          continue;
+        }
+        try {
+          const transformed = transform501Row(row);
+          enrichedRows.push(transformed);
+          validCount++;
+        } catch (e) {
+          invalidCount++;
+        }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 501: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    // === LEGACY: prepend Pedimento Unificado for other tables ===
+    const sampleColCount = rows[0].length + 1;
+    const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
+    const enrichedRows: string[][] = [headers];
 
     let pedimentosBuild = 0;
     let pedimentosInvalid = 0;
 
     for (const row of dataRows) {
       if (row.length < 3) {
-        // Row too short to extract pedimento components
         enrichedRows.push(['', ...row]);
         pedimentosInvalid++;
         continue;
@@ -104,9 +164,9 @@ export const enrichWithPedimentoUnificado = (
       const indice = row[1].trim();
       const seccion = row[2].trim();
 
-      // Validate components
       if (patente && indice && seccion && /^\d+$/.test(patente) && /^\d+$/.test(indice) && /^\d+$/.test(seccion)) {
-        const pedimento = buildPedimentoUnificado(patente, indice, seccion, year);
+        const yy = String(detectedYear % 100).padStart(2, '0');
+        const pedimento = buildPedimentoUnificado(patente, indice, seccion, yy);
         enrichedRows.push([pedimento, ...row]);
         pedimentosBuild++;
       } else {
@@ -143,7 +203,6 @@ export const validateProcessedData = (
 ): string[] => {
   const warnings: string[] = [];
 
-  // Check for critical files
   if (!data['501']) {
     const w = 'Falta archivo crítico: 501 - Datos generales';
     warnings.push(w);
@@ -155,9 +214,8 @@ export const validateProcessedData = (
     onLog(`⚠️ ${w}`);
   }
 
-  // Validate pedimento format in all files
   for (const [fileKey, rows] of Object.entries(data)) {
-    if (rows.length <= 1) continue; // Only header or empty
+    if (rows.length <= 1) continue;
 
     let invalidCount = 0;
     let emptyCount = 0;
@@ -183,7 +241,6 @@ export const validateProcessedData = (
     }
   }
 
-  // Cross-validate: check pedimentos in partidas exist in datos generales
   if (data['501'] && data['551']) {
     const pedimentos501 = new Set<string>();
     for (let i = 1; i < data['501'].length; i++) {
