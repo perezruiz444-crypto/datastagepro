@@ -21,7 +21,7 @@ const faqs = [
   },
   {
     question: "¿Es seguro subir mis archivos?",
-    answer: "Sí. Los archivos se procesan de forma temporal y no se almacenan permanentemente. La conversión ocurre en tu sesión de Google AI Studio.",
+    answer: "Sí. Los archivos se procesan directamente en tu navegador de forma local. No se envían a ningún servidor externo ni se almacenan permanentemente.",
   },
   {
     question: "¿Cuántos archivos .asc puede procesar a la vez?",
