@@ -135,8 +135,15 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Dirección',
   ],
   '506': [
-    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
-    'Tipo Fecha', 'Fecha Operación', 'Fecha Pago',
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave',
+    'Tipo de Pedimento',
+    'Fecha de pago',
+    'Tipo de fecha',
+    'Fecha de operación',
+    'Fecha de validación o de pago real',
   ],
   '507': [
     'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',

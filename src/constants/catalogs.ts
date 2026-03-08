@@ -47,6 +47,16 @@ export const TIPO_GUIA: Record<string, string> = {
   'M': 'MASTER',
 };
 
+/** Tipo de Fecha (Apéndice 21) */
+export const TIPO_FECHA: Record<string, string> = {
+  '1': 'ENTRADA',
+  '2': 'PAGO',
+  '3': 'EXTRACCIÓN',
+  '5': 'PRESENTACIÓN',
+  '6': 'IMPEX',
+  '7': 'ORIGINAL',
+};
+
 /**
  * Formatea una fecha de YYYYMMDD a DD/MM/YYYY.
  * Si el formato no es válido, retorna el valor original.
