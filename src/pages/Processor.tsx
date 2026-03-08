@@ -192,7 +192,7 @@ const Processor = () => {
                 <TabsTrigger value={ReportMode.MONTHLY}>Mensual</TabsTrigger>
                 <TabsTrigger value={ReportMode.ANNUAL}>Anual</TabsTrigger>
                 <TabsTrigger value={ReportMode.CONSOLIDATED_TABLE}>Consolidado por Tabla</TabsTrigger>
-                <TabsTrigger value={ReportMode.MULTI_YEAR}>Multi-Anual</TabsTrigger>
+                <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.MONTHLY}>
                 <UploadSection
