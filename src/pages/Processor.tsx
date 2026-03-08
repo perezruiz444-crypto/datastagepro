@@ -21,7 +21,6 @@ const Processor = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [processedData, setProcessedData] = useState<ProcessedData>({});
   const [reportTitle, setReportTitle] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState(MONTH_NAMES[new Date().getMonth()]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [annualFiles, setAnnualFiles] = useState<Record<string, File | null>>(
     Object.fromEntries(MONTH_NAMES.map(m => [m, null]))
@@ -52,12 +51,12 @@ const Processor = () => {
   };
 
   // Monthly processing
-  const handleMonthlyFileSelect = async (file: File) => {
+  const handleMonthlyFileSelect = async (file: File, month: string, year: number) => {
     setAppState(AppState.PROCESSING);
-    setReportTitle(`${selectedMonth} ${selectedYear}`);
+    setReportTitle(`${month} ${year}`);
     cancellationSignal.current = { current: false };
     try {
-      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, selectedYear);
+      const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, year);
       setProcessedData(data);
       setAppState(AppState.RESULTS);
     } catch (error) {
@@ -195,13 +194,7 @@ const Processor = () => {
                 <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.MONTHLY}>
-                <UploadSection
-                  onFileSelect={handleMonthlyFileSelect}
-                  selectedMonth={selectedMonth}
-                  selectedYear={selectedYear}
-                  onMonthChange={setSelectedMonth}
-                  onYearChange={(y) => setSelectedYear(parseInt(y, 10))}
-                />
+                <UploadSection onFileSelect={handleMonthlyFileSelect} />
               </TabsContent>
               <TabsContent value={ReportMode.ANNUAL}>
                 <AnnualUploadSection
