@@ -1358,6 +1358,25 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
+    if (fileKey === 'Sel') {
+      const headers = COLUMN_HEADERS['Sel'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transformSelRow(row));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ Sel: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
     if (fileKey === 'Resumen') {
       const headers = COLUMN_HEADERS['Resumen'];
       const enrichedRows: string[][] = [headers];
