@@ -251,6 +251,38 @@ const transform507Row = (row: string[], lookup501: Map<string, Context501>): str
 };
 
 /**
+ * Transforma una fila cruda del archivo 508 en la fila de salida de 16 columnas.
+ */
+const transform508Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  const fechaPago = get(13);
+  const yy = extractYearFromDateField(fechaPago);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+  return [
+    pedimento,
+    get(2),                        // Clave de sección aduanera de despacho
+    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
+    ctx.clave,                     // Clave (desde 501)
+    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
+    formatDateYYYYMMDD(fechaPago), // Fecha de pago
+    get(3),                        // Clave de institución emisora
+    get(4),                        // Número de cuenta
+    get(5),                        // Folio de la constancia
+    formatDateYYYYMMDD(get(6)),    // Fecha de la constancia
+    get(7),                        // Clave de tipo de cuenta
+    get(8),                        // Clave de garantía
+    get(9),                        // Valor unitario del título
+    get(10),                       // Total de la garantía
+    get(11),                       // Cantidad en unidades de medida del precio estimado
+    get(12),                       // Títulos asignados
+  ];
+};
+
+/**
  * Construye lookup de contexto desde la tabla 501 ya enriquecida.
  */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
@@ -450,6 +482,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ 507: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === '508') {
+      const headers = COLUMN_HEADERS['508'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transform508Row(row, context501));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ 508: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
