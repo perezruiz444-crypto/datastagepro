@@ -809,6 +809,33 @@ const transformInciRow = (row: string[]): string[] => {
 };
 
 /**
+ * Transforma una fila cruda del archivo Sel (Selección Automatizada / Semáforo Fiscal).
+ * 10 columnas de salida. Sin JOIN con 501.
+ * Pedimento construido desde FechaSeleccion (idx 5) en lugar de FechaPagoReal.
+ */
+const transformSelRow = (row: string[]): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+
+  // Pedimento: año desde idx 5 (FechaSeleccion)
+  const fechaSeleccion = get(5);
+  const yy = extractYearFromDateField(fechaSeleccion);
+  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
+
+  return [
+    pedimento,                              // Pedimento
+    get(2),                                 // Clave de sección aduanera de despacho
+    get(9),                                 // Tipo de Operación (directo, sin catálogo)
+    get(8),                                 // Clave de Documento
+    get(3),                                 // Consecutivo de Remesa
+    get(4),                                 // Número de Selección
+    formatDateYYYYMMDD(fechaSeleccion),     // Fecha de Selección
+    get(6),                                 // Hora de Selección (texto crudo)
+    get(7),                                 // Resultado del Semáforo Fiscal (crudo, sin catálogo)
+    get(0),                                 // Patente Original Cruda
+  ];
+};
+
+/**
  * Transforma una fila cruda del archivo Resumen en 7 columnas.
  * Sin llave Pedimento, sin JOIN con 501.
  */
@@ -1328,6 +1355,25 @@ export const enrichWithPedimentoUnificado = (
 
       enrichedData[fileKey] = enrichedRows;
       onLog(`✅ Inci: ${validCount} registros transformados (${invalidCount} inválidos)`);
+      continue;
+    }
+
+    if (fileKey === 'Sel') {
+      const headers = COLUMN_HEADERS['Sel'];
+      const enrichedRows: string[][] = [headers];
+      let validCount = 0;
+      let invalidCount = 0;
+
+      for (const row of dataRows) {
+        if (row.length < 3) { invalidCount++; continue; }
+        try {
+          enrichedRows.push(transformSelRow(row));
+          validCount++;
+        } catch (e) { invalidCount++; }
+      }
+
+      enrichedData[fileKey] = enrichedRows;
+      onLog(`✅ Sel: ${validCount} registros transformados (${invalidCount} inválidos)`);
       continue;
     }
 
