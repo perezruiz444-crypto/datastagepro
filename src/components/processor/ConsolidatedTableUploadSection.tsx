@@ -18,7 +18,7 @@ interface HistoricalUploadSectionProps {
   onProcess: (fileType: string, files: { file: File; label: string }[]) => void;
 }
 
-export const HistoricalUploadSection: React.FC<HistoricalUploadSectionProps> = ({
+export const ConsolidatedTableUploadSection: React.FC<HistoricalUploadSectionProps> = ({
   selectedYear, onYearChange, onProcess,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -49,7 +49,7 @@ export const HistoricalUploadSection: React.FC<HistoricalUploadSectionProps> = (
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Generar Reporte Histórico</CardTitle>
+        <CardTitle>Generar Reporte Consolidado por Tabla</CardTitle>
         <CardDescription>Seleccione un tipo de archivo, suba todos los archivos .asc y asigne una etiqueta de periodo a cada uno.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

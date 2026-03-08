@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     question: "¿Qué modos de reporte están disponibles?",
-    answer: "Cuatro modos: Mensual (un ZIP por mes), Anual (12 ZIPs consolidados en un solo reporte con columna de mes), Histórico (múltiples archivos .asc del mismo tipo con etiquetas de periodo) y Multi-Anual (fusión de reportes Excel generados previamente).",
+    answer: "Cuatro modos: Mensual (un ZIP por mes), Anual (12 ZIPs consolidados en un solo reporte con columna de mes), Consolidado por Tabla (múltiples archivos .asc del mismo tipo con etiquetas de periodo) y Multi-Anual (fusión de reportes Excel generados previamente).",
   },
   {
     question: "¿Cuáles son los archivos críticos de un Data Stage?",

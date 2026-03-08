@@ -10,7 +10,7 @@ import { UploadSection } from '@/components/processor/UploadSection';
 import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
 import { AnnualUploadSection } from '@/components/processor/AnnualUploadSection';
-import { HistoricalUploadSection } from '@/components/processor/HistoricalUploadSection';
+import { ConsolidatedTableUploadSection } from '@/components/processor/ConsolidatedTableUploadSection';
 import { MultiYearUploadSection } from '@/components/processor/MultiYearUploadSection';
 import ThemeToggle from '@/components/landing/ThemeToggle';
 
@@ -100,10 +100,10 @@ const Processor = () => {
     }
   };
 
-  // Historical processing
-  const handleHistoricalProcess = async (fileType: string, files: { file: File; label: string }[]) => {
+  // Consolidated table processing
+  const handleConsolidatedTableProcess = async (fileType: string, files: { file: File; label: string }[]) => {
     setAppState(AppState.PROCESSING);
-    setReportTitle(`Histórico ${fileType}`);
+    setReportTitle(`Consolidado por Tabla - ${fileType}`);
     cancellationSignal.current = { current: false };
 
     try {
@@ -189,7 +189,7 @@ const Processor = () => {
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value={ReportMode.MONTHLY}>Mensual</TabsTrigger>
                 <TabsTrigger value={ReportMode.ANNUAL}>Anual</TabsTrigger>
-                <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
+                <TabsTrigger value={ReportMode.CONSOLIDATED_TABLE}>Consolidado por Tabla</TabsTrigger>
                 <TabsTrigger value={ReportMode.MULTI_YEAR}>Multi-Anual</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.MONTHLY}>
@@ -210,11 +210,11 @@ const Processor = () => {
                   onProcess={handleAnnualProcess}
                 />
               </TabsContent>
-              <TabsContent value={ReportMode.HISTORICAL}>
-                <HistoricalUploadSection
+              <TabsContent value={ReportMode.CONSOLIDATED_TABLE}>
+                <ConsolidatedTableUploadSection
                   selectedYear={selectedYear}
                   onYearChange={(y) => setSelectedYear(parseInt(y, 10))}
-                  onProcess={handleHistoricalProcess}
+                  onProcess={handleConsolidatedTableProcess}
                 />
               </TabsContent>
               <TabsContent value={ReportMode.MULTI_YEAR}>

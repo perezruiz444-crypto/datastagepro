@@ -8,7 +8,7 @@ export enum AppState {
 export enum ReportMode {
   MONTHLY = 'MONTHLY',
   ANNUAL = 'ANNUAL',
-  HISTORICAL = 'HISTORICAL',
+  CONSOLIDATED_TABLE = 'CONSOLIDATED_TABLE',
   MULTI_YEAR = 'MULTI_YEAR',
 }
 
