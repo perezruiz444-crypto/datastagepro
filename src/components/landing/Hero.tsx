@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
 import { FileArchive, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const TOOL_URL = "https://aistudio.google.com/apps/a4fded63-c3df-497c-a6d8-e5fa6cef3cc1?showAssistant=true&showCode=true";
+import { Link } from "react-router-dom";
 
 const Hero = () => (
   <section className="relative overflow-hidden py-24 md:py-36">
@@ -37,10 +36,10 @@ const Hero = () => (
 
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
           <Button size="lg" asChild className="text-base px-8 h-12">
-            <a href={TOOL_URL} target="_blank" rel="noopener noreferrer">
+            <Link to="/app">
               Comenzar ahora
               <ArrowRight className="ml-2 h-4 w-4" />
-            </a>
+            </Link>
           </Button>
           <Button size="lg" variant="outline" asChild className="text-base px-8 h-12">
             <a href="#como-funciona">Ver cómo funciona</a>

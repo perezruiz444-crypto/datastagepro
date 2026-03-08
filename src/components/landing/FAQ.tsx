@@ -17,11 +17,11 @@ const faqs = [
   },
   {
     question: "¿Necesito instalar algún software?",
-    answer: "No. La herramienta funciona completamente en línea a través de Google AI Studio. Solo necesitas un navegador web y tu archivo .zip.",
+    answer: "No. La herramienta funciona completamente en línea desde tu navegador. Solo necesitas subir tu archivo .zip y obtener tu Excel.",
   },
   {
     question: "¿Es seguro subir mis archivos?",
-    answer: "Sí. Los archivos se procesan de forma temporal y no se almacenan permanentemente. La conversión ocurre en tu sesión de Google AI Studio.",
+    answer: "Sí. Los archivos se procesan directamente en tu navegador de forma local. No se envían a ningún servidor externo ni se almacenan permanentemente.",
   },
   {
     question: "¿Cuántos archivos .asc puede procesar a la vez?",
@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     question: "¿Tiene algún costo?",
-    answer: "La herramienta es gratuita. Solo necesitas una cuenta de Google para acceder a Google AI Studio.",
+    answer: "La herramienta es completamente gratuita. No requiere registro ni cuenta de terceros.",
   },
 ];
 

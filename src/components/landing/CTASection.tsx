@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const TOOL_URL = "https://aistudio.google.com/apps/a4fded63-c3df-497c-a6d8-e5fa6cef3cc1?showAssistant=true&showCode=true";
+import { Link } from "react-router-dom";
 
 const CTASection = () => (
   <section className="py-24">
@@ -21,10 +20,10 @@ const CTASection = () => (
           Sin instalaciones, sin registros. Solo sube tu archivo y obtén tu Excel.
         </p>
         <Button size="lg" asChild className="text-base px-10 h-12">
-          <a href={TOOL_URL} target="_blank" rel="noopener noreferrer">
+          <Link to="/app">
             Abrir la herramienta
             <ArrowRight className="ml-2 h-4 w-4" />
-          </a>
+          </Link>
         </Button>
       </motion.div>
     </div>
