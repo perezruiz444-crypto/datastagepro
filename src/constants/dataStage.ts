@@ -276,8 +276,16 @@ export const COLUMN_HEADERS: Record<string, string[]> = {
     'Precio Unitario USD',
   ],
   '552': [
-    'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
-    'Fracción Arancelaria', 'Secuencia', 'Kilometraje', 'Fecha Pago',
+    'Pedimento',
+    'Clave de sección aduanera de despacho',
+    'Tipo de Operación',
+    'Clave de Pedimento',
+    'Tipo de Pedimento',
+    'Fecha de pago real',
+    'Fracción arancelaria',
+    'Secuencia de la fracción arancelaria',
+    'VIN o número de serie',
+    'Kilometraje del vehículo',
   ],
   '553': [
     'Pedimento', 'Patente', 'Núm. Pedimento', 'Sección Aduanera',
