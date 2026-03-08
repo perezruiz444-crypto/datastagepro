@@ -82,6 +82,7 @@ interface Context501 {
   tipoOperacion: string;
   clave: string;
   tipoPedimento: string;
+  fechaRecepcion: string;
 }
 
 /**
