@@ -152,7 +152,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
             <Button
               size="lg"
-              onClick={() => generateSeparateSheetsExcelReport(data, reportTitle, year, reportMode, exportFormat)}
+              onClick={() => generateSeparateSheetsExcelReport(data, customFileName || reportTitle, year, reportMode, exportFormat)}
             >
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Reporte Consolidado
