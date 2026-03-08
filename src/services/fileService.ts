@@ -6,46 +6,50 @@ import { enrichWithPedimentoUnificado, validateProcessedData } from '@/services/
 
 export { enrichWithPedimentoUnificado, validateProcessedData };
 
-export const detectMonthFromZipFile = async (file: File): Promise<string | null> => {
+export const detectPeriodFromZipFile = async (file: File): Promise<{ month: string | null; year: number | null }> => {
   try {
     const zip = await JSZip.loadAsync(file);
     const ascFiles = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.asc'));
     const file501 = ascFiles.find(name => name.includes('501'));
-    if (!file501) return null;
+    if (!file501) return { month: null, year: null };
 
     const content = await zip.file(file501)!.async('string');
     const lines = content.split(/\r?\n/).slice(0, 100);
 
     const monthCounts: Record<number, number> = {};
+    const yearCounts: Record<number, number> = {};
     lines.forEach(line => {
       const parts = line.split('|');
       parts.forEach(field => {
         const trimmed = field.trim();
         if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
+          const yr = parseInt(trimmed.substring(0, 4), 10);
           const month = parseInt(trimmed.substring(4, 6), 10);
-          if (month >= 1 && month <= 12) {
+          if (month >= 1 && month <= 12 && yr >= 2000 && yr <= 2099) {
             monthCounts[month] = (monthCounts[month] || 0) + 1;
+            yearCounts[yr] = (yearCounts[yr] || 0) + 1;
           }
         }
       });
     });
 
-    let maxCount = 0;
-    let detectedMonth: number | null = null;
-    for (const [month, count] of Object.entries(monthCounts)) {
-      if (count > maxCount) {
-        maxCount = count;
-        detectedMonth = parseInt(month, 10);
-      }
+    let maxMonthCount = 0, detectedMonth: number | null = null;
+    for (const [m, count] of Object.entries(monthCounts)) {
+      if (count > maxMonthCount) { maxMonthCount = count; detectedMonth = parseInt(m, 10); }
+    }
+    let maxYearCount = 0, detectedYear: number | null = null;
+    for (const [y, count] of Object.entries(yearCounts)) {
+      if (count > maxYearCount) { maxYearCount = count; detectedYear = parseInt(y, 10); }
     }
 
-    if (detectedMonth !== null) {
-      return MONTH_NAMES[detectedMonth - 1];
-    }
+    return {
+      month: detectedMonth !== null ? MONTH_NAMES[detectedMonth - 1] : null,
+      year: detectedYear,
+    };
   } catch (e) {
-    console.error("Error detectando mes desde contenido:", e);
+    console.error("Error detectando periodo desde contenido:", e);
   }
-  return null;
+  return { month: null, year: null };
 };
 
 export const processZipFile = async (

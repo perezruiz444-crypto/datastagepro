@@ -161,7 +161,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
               <Button
                 size="lg"
                 variant="secondary"
-                onClick={() => generateIndividualExcelFiles(data, reportTitle, year, reportMode, exportFormat)}
+                onClick={() => generateIndividualExcelFiles(data, customFileName || reportTitle, year, reportMode, exportFormat)}
               >
                 <FileArchive className="mr-2 h-4 w-4" />
                 Reportes Individuales (ZIP)
