@@ -68,6 +68,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [detectedYears, setDetectedYears] = useState<Record<string, number>>({});
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   // Compute detected year from most frequent year across files
@@ -97,6 +98,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
       return;
     }
 
+    const skipped: string[] = [];
     for (const file of zipFiles) {
       let guessedMonth = guessMonth(file.name);
       try {
@@ -106,9 +108,14 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
       } catch (e) {
         console.error('Error detectando periodo:', e);
       }
-      if (guessedMonth) newFilesMap[guessedMonth] = file;
+      if (guessedMonth) {
+        newFilesMap[guessedMonth] = file;
+      } else {
+        skipped.push(file.name);
+      }
     }
 
+    setSkippedFiles(skipped);
     setDetectedYears(newYears);
     onFilesChange(newFilesMap);
     setIsProcessing(false);
@@ -161,6 +168,18 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
           )}
           <input type="file" ref={bulkInputRef} accept=".zip" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
         </div>
+
+        {/* Skipped files alert */}
+        {skippedFiles.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Archivos no reconocidos</AlertTitle>
+            <AlertDescription>
+              No se pudo detectar el periodo de: <span className="font-mono font-semibold">{skippedFiles.join(', ')}</span>.
+              Renombre los archivos incluyendo el mes, por ejemplo: <span className="font-mono font-semibold">Enero_2025.zip</span> o <span className="font-mono font-semibold">01-2025.zip</span>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Validation alerts */}
         {uploadedFilesCount > 0 && (

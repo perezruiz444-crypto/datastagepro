@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { FileArchive, ArrowRight, X, Sparkles } from 'lucide-react';
+import { FileArchive, ArrowRight, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { detectPeriodFromZipFile } from '@/services/fileService';
 
 interface UploadSectionProps {
@@ -98,7 +99,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
               </Badge>
             )}
             {!periodDetected && (
-              <p className="text-sm text-destructive mb-4">No se pudo detectar el periodo del archivo. Verifique el nombre del ZIP.</p>
+              <Alert variant="destructive" className="text-left mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>No se pudo detectar el periodo</AlertTitle>
+                <AlertDescription>
+                  Renombre el archivo ZIP incluyendo el mes y año, por ejemplo: <span className="font-mono font-semibold">Enero_2025.zip</span> o <span className="font-mono font-semibold">01-2025.zip</span>
+                </AlertDescription>
+              </Alert>
             )}
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Button variant="outline" onClick={handleCancelSelection}>
