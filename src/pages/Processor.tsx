@@ -219,8 +219,8 @@ const Processor = () => {
                   onProcess={handleConsolidatedTableProcess}
                 />
               </TabsContent>
-              <TabsContent value={ReportMode.MULTI_YEAR}>
-                <MultiYearUploadSection onProcess={handleMultiYearProcess} />
+              <TabsContent value={ReportMode.HISTORICAL}>
+                <HistoricalUploadSection onProcess={handleHistoricalProcess} />
               </TabsContent>
             </Tabs>
           </div>

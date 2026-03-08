@@ -312,8 +312,8 @@ export const generateSeparateSheetsExcelReport = (
     let fileName = `Reporte_Consolidado_${title.replace(/\s/g, '_')}_${year}.xlsx`;
     if (reportMode === ReportMode.MONTHLY) {
       fileName = `Data Stage ${title} ${year}.xlsx`;
-    } else if (reportMode === ReportMode.MULTI_YEAR) {
-      fileName = `Data_Stage_MultiAnual_${new Date().getTime()}.xlsx`;
+    } else if (reportMode === ReportMode.HISTORICAL) {
+      fileName = `Data_Stage_Historico_${title.replace(/\s/g, '_')}.xlsx`;
     }
 
     const link = document.createElement('a');
