@@ -20,10 +20,10 @@ const CTASection = () => (
           Sin instalaciones, sin registros. Solo sube tu archivo y obtén tu Excel.
         </p>
         <Button size="lg" asChild className="text-base px-10 h-12">
-          <a href={TOOL_URL} target="_blank" rel="noopener noreferrer">
+          <Link to="/app">
             Abrir la herramienta
             <ArrowRight className="ml-2 h-4 w-4" />
-          </a>
+          </Link>
         </Button>
       </motion.div>
     </div>

@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     question: "¿Tiene algún costo?",
-    answer: "La herramienta es gratuita. Solo necesitas una cuenta de Google para acceder a Google AI Studio.",
+    answer: "La herramienta es completamente gratuita. No requiere registro ni cuenta de terceros.",
   },
 ];
 
