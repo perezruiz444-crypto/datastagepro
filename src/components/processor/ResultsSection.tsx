@@ -157,7 +157,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Reporte Consolidado
             </Button>
-            {reportMode !== ReportMode.HISTORICAL && (
+            {reportMode !== ReportMode.CONSOLIDATED_TABLE && (
               <Button
                 size="lg"
                 variant="secondary"
