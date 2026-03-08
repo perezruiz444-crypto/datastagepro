@@ -194,13 +194,7 @@ const Processor = () => {
                 <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.MONTHLY}>
-                <UploadSection
-                  onFileSelect={handleMonthlyFileSelect}
-                  selectedMonth={selectedMonth}
-                  selectedYear={selectedYear}
-                  onMonthChange={setSelectedMonth}
-                  onYearChange={(y) => setSelectedYear(parseInt(y, 10))}
-                />
+                <UploadSection onFileSelect={handleMonthlyFileSelect} />
               </TabsContent>
               <TabsContent value={ReportMode.ANNUAL}>
                 <AnnualUploadSection
