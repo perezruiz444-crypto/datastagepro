@@ -1399,6 +1399,9 @@ export const enrichWithPedimentoUnificado = (
 
     const sampleColCount = rows[0].length + 1;
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
+    if (!COLUMN_HEADERS[fileKey]) {
+      onLog(`ℹ️ ${fileKey}: Usando transformación genérica (sin mapeo específico)`);
+    }
     const enrichedRows: string[][] = [headers];
 
     let pedimentosBuild = 0;
