@@ -315,7 +315,7 @@ export const generateSeparateSheetsExcelReport = (
           }
         }
 
-        const rawName = FILE_NAMES[section] || section;
+        const rawName = CLEAN_FILE_NAMES[section] || section;
         const sheetName = rawName.replace(/[:\\\/\?\*\[\]]/g, '_').substring(0, 31);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
