@@ -32,7 +32,7 @@ const KpiCard: React.FC<{ title: string; value: number | string; icon: React.Rea
 
 export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, reportTitle, year, reportMode, warnings = [] }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.TEXT);
-  const [customFileName, setCustomFileName] = useState(reportTitle);
+  const [customFileName, setCustomFileName] = useState(`Data_Stage_${reportTitle.replace(/\s/g, '_')}`);
 
   const processedFiles = Object.keys(data);
   const totalFiles = processedFiles.length;
