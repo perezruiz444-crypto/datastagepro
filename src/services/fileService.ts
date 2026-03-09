@@ -377,7 +377,7 @@ export const generateIndividualExcelFiles = async (
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        zip.file(`Reporte_${section}.xlsx`, excelBuffer);
+        zip.file(`${CLEAN_FILE_NAMES[section] || section}.xlsx`, excelBuffer);
       }
     });
 
