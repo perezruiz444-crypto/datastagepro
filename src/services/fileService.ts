@@ -326,7 +326,7 @@ export const generateSeparateSheetsExcelReport = (
 
     let fileName = `Reporte_Consolidado_${title.replace(/\s/g, '_')}_${year}.xlsx`;
     if (reportMode === ReportMode.MONTHLY) {
-      fileName = `Data_Stage_${title.replace(/\s/g, '_')}_${year}.xlsx`;
+      fileName = `${title.replace(/\s/g, '_')}.xlsx`;
     } else if (reportMode === ReportMode.HISTORICAL) {
       fileName = `Data_Stage_Historico.xlsx`;
     }
@@ -385,7 +385,7 @@ export const generateIndividualExcelFiles = async (
 
     let fileName = `Data_Stage_Individual_${title.replace(/\s/g, '_')}_${year}.zip`;
     if (reportMode === ReportMode.MONTHLY) {
-      fileName = `Data_Stage_Individual_${title.replace(/\s/g, '_')}_${year}.zip`;
+      fileName = `${title.replace(/\s/g, '_')}_Individual.zip`;
     }
 
     const link = document.createElement('a');
