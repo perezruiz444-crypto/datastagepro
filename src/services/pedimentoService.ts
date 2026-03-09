@@ -881,25 +881,8 @@ export const enrichWithPedimentoUnificado = (
 ): ProcessedData => {
   const enrichedData: ProcessedData = {};
 
-  // Detect year from 501 for legacy tables that still need it
-  let detectedYear = 2020;
-  if (data['501'] && data['501'].length > 0) {
-    for (let i = 0; i < Math.min(data['501'].length, 20); i++) {
-      const row = data['501'][i];
-      if (row.length > 30) {
-        const fechaPago = row[30].trim();
-        if (fechaPago.length === 8 && /^\d{8}$/.test(fechaPago)) {
-          detectedYear = parseInt(fechaPago.substring(0, 4), 10);
-          break;
-        }
-        if (fechaPago.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(fechaPago)) {
-          detectedYear = parseInt(fechaPago.substring(0, 4), 10);
-          break;
-        }
-      }
-    }
-  }
-  onLog(`📋 Año detectado para Pedimento Unificado: ${detectedYear}`);
+  // No global detectedYear — each row extracts its own year from date fields
+  onLog(`📋 Extracción de año: modo per-row (sin detectedYear global)`);
 
   // === PHASE 1: Process 501 first (needed for context injection) ===
   if (data['501']) {
@@ -1433,7 +1416,19 @@ export const enrichWithPedimentoUnificado = (
       const seccion = row[2].trim();
 
       if (patente && indice && seccion && /^\d+$/.test(patente) && /^\d+$/.test(indice) && /^\d+$/.test(seccion)) {
-        const yy = String(detectedYear % 100).padStart(2, '0');
+        // Extract year per-row: scan fields for a date pattern
+        let yy = '00';
+        for (const field of row) {
+          const candidate = field.trim();
+          if (candidate.length >= 8 && /^\d{4}/.test(candidate)) {
+            yy = extractYearFromDateField(candidate);
+            if (yy !== '00') break;
+          }
+          if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}/.test(candidate)) {
+            yy = extractYearFromDateField(candidate);
+            if (yy !== '00') break;
+          }
+        }
         const pedimento = buildPedimentoUnificado(patente, indice, seccion, yy);
         enrichedRows.push([pedimento, ...row]);
         pedimentosBuild++;

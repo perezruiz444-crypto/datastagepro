@@ -82,25 +82,27 @@ export const formatDateYYYYMMDD = (value: string): string => {
  * Soporta: YYYYMMDD, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
  */
 export const extractYearFromDateField = (value: string): string => {
+  if (!value || !value.trim()) return '00';
   const trimmed = value.trim();
 
-  // YYYYMMDD (e.g. "20241015") → año = "2024" → "24"
-  if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-    return trimmed.substring(0, 4).slice(-2);
+  // YYYY... formats: "2026-01-27 19:14:02", "2026-01-27", "20260127"
+  if (trimmed.length >= 8 && /^\d{4}/.test(trimmed)) {
+    const yearStr = trimmed.substring(0, 4);
+    const short = yearStr.substring(2, 4);
+    return /^\d{2}$/.test(short) ? short : '00';
   }
 
-  // YYYY-MM-DD (e.g. "2024-10-15") → año = "2024" → "24"
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed.substring(0, 4).slice(-2);
-  }
-
-  // DD/MM/YYYY o DD-MM-YYYY (e.g. "15/10/2024") → año = "2024" → "24"
-  const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})$/);
+  // DD/MM/YYYY or DD-MM-YYYY (with optional time)
+  const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})/);
   if (dmyMatch) {
-    return dmyMatch[1].slice(-2);
+    return dmyMatch[1].substring(2, 4);
   }
 
-  // Debug: log valores no reconocidos
+  // Bare 4-digit year e.g. "2026"
+  if (/^\d{4}$/.test(trimmed)) {
+    return trimmed.substring(2, 4);
+  }
+
   console.warn(`[extractYear] Formato no reconocido: "${trimmed}"`);
   return '00';
 };
