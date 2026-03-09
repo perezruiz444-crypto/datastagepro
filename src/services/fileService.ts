@@ -213,38 +213,28 @@ export const processHistoricalData = async (
   onProgress: (prog: ProgressState) => void,
   cancellationSignal: { current: boolean }
 ): Promise<{ data: ProcessedData; yearRange: string }> => {
-  const allMonthlyData: { month: string; year: number; data: ProcessedData }[] = [];
+  const consolidated: ProcessedData = {};
+  const yearsSet = new Set<number>();
+  const monthsPerYear: Record<number, Set<string>> = {};
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     onLog(`--- [${i + 1}/${files.length}] Procesando ZIP: ${file.name} ---`);
     onProgress({ total: Math.round((i / files.length) * 100), file: 0, fileName: file.name });
 
-    // Auto-detect period
     const { month, year } = await detectPeriodFromZipFile(file);
     const detectedMonth = month || 'Desconocido';
     const detectedYear = year || new Date().getFullYear();
     onLog(`Periodo detectado: ${detectedMonth} ${detectedYear}`);
 
+    yearsSet.add(detectedYear);
+    if (!monthsPerYear[detectedYear]) monthsPerYear[detectedYear] = new Set();
+    monthsPerYear[detectedYear].add(detectedMonth);
+
     // Process ZIP with full transformations
     const data = await processZipFile(file, onLog, onProgress, cancellationSignal, detectedYear);
-    allMonthlyData.push({ month: detectedMonth, year: detectedYear, data });
-  }
 
-  // Sort by year then month
-  allMonthlyData.sort((a, b) => {
-    if (a.year !== b.year) return a.year - b.year;
-    return MONTH_NAMES.indexOf(a.month) - MONTH_NAMES.indexOf(b.month);
-  });
-
-  // Consolidate all tables
-  const consolidated: ProcessedData = {};
-  const allFileKeys = new Set<string>();
-  allMonthlyData.forEach(({ data }) => Object.keys(data).forEach(k => allFileKeys.add(k)));
-
-  onLog(`Consolidando ${allFileKeys.size} tipos de tabla en histórico...`);
-
-  allMonthlyData.forEach(({ month, year, data }) => {
+    // Merge immediately into consolidated, then discard reference
     Object.entries(data).forEach(([fileKey, records]) => {
       if (!consolidated[fileKey]) {
         consolidated[fileKey] = [];
@@ -257,17 +247,20 @@ export const processHistoricalData = async (
       const dataRows = records.slice(1);
       const enrichedRows = dataRows.map(row => {
         const r = [...row];
-        r.splice(1, 0, String(year), month);
+        r.splice(1, 0, String(detectedYear), detectedMonth);
         return r;
       });
       consolidated[fileKey].push(...enrichedRows);
     });
-  });
+
+    // Let GC collect the per-ZIP data
+    onLog(`♻️ ZIP ${file.name} procesado y liberado de memoria`);
+  }
 
   // Determine year range
-  const years = allMonthlyData.map(d => d.year);
-  const minYear = Math.min(...years);
-  const maxYear = Math.max(...years);
+  const years = Array.from(yearsSet).sort();
+  const minYear = years[0];
+  const maxYear = years[years.length - 1];
   const yearRange = minYear === maxYear ? `${minYear}` : `${minYear}-${maxYear}`;
 
   onLog(`✅ Histórico generado: ${Object.keys(consolidated).length} tablas, rango ${yearRange}`);
