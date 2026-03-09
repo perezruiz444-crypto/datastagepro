@@ -383,9 +383,9 @@ export const generateIndividualExcelFiles = async (
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-    let fileName = `Reportes_Individuales_${title.replace(/\s/g, '_')}_${year}.zip`;
+    let fileName = `Data_Stage_Individual_${title.replace(/\s/g, '_')}_${year}.zip`;
     if (reportMode === ReportMode.MONTHLY) {
-      fileName = `Reportes Individuales Data Stage ${title} ${year}.zip`;
+      fileName = `Data_Stage_Individual_${title.replace(/\s/g, '_')}_${year}.zip`;
     }
 
     const link = document.createElement('a');
