@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { ProgressState, ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
-import { FILE_NAMES, CRITICAL_FILES, MONTH_NAMES, COLUMN_HEADERS, generateFallbackHeaders } from '@/constants/dataStage';
+import { FILE_NAMES, CRITICAL_FILES, MONTH_NAMES, COLUMN_HEADERS, generateFallbackHeaders, CLEAN_FILE_NAMES } from '@/constants/dataStage';
 import { enrichWithPedimentoUnificado, validateProcessedData } from '@/services/pedimentoService';
 
 export { enrichWithPedimentoUnificado, validateProcessedData };
