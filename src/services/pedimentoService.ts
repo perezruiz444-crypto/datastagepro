@@ -1,22 +1,42 @@
 import { ProcessedData } from '@/types/dataStage';
-import { COLUMN_HEADERS, PEDIMENTO_REGEX, generateFallbackHeaders } from '@/constants/dataStage';
-import {
-  TIPO_OPERACION,
-  TIPO_PEDIMENTO,
-  MEDIO_TRANSPORTE,
-  DESTINO_MERCANCIA,
-  TIPO_GUIA,
-  TIPO_FECHA,
-  formatDateYYYYMMDD,
-  extractYearFromDateField,
-} from '@/constants/catalogs';
+import { COLUMN_HEADERS, PEDIMENTO_REGEX, PEDIMENTO_UNIFICADO_INDEX, MONTH_NAMES, generateFallbackHeaders } from '@/constants/dataStage';
+import { extractYearFromDateField } from '@/constants/catalogs';
+
+// ===========================
+// HELPERS
+// ===========================
+
+/** Extrae Mes (nombre) y Año (4 dígitos) de un string de fecha crudo por fila */
+const extractMesAnioFromFecha = (fecha: string): { mes: string; anio: string } => {
+  if (!fecha || !fecha.trim()) return { mes: '', anio: '' };
+  const trimmed = fecha.trim();
+
+  // YYYYMMDD
+  if (trimmed.length >= 8 && /^\d{8}/.test(trimmed)) {
+    const yyyy = trimmed.substring(0, 4);
+    const mm = parseInt(trimmed.substring(4, 6), 10);
+    if (mm >= 1 && mm <= 12) return { mes: MONTH_NAMES[mm - 1], anio: yyyy };
+  }
+
+  // YYYY-MM-DD (with optional time)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const mm = parseInt(isoMatch[2], 10);
+    if (mm >= 1 && mm <= 12) return { mes: MONTH_NAMES[mm - 1], anio: isoMatch[1] };
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^\d{2}[\/\-](\d{2})[\/\-](\d{4})/);
+  if (dmyMatch) {
+    const mm = parseInt(dmyMatch[1], 10);
+    if (mm >= 1 && mm <= 12) return { mes: MONTH_NAMES[mm - 1], anio: dmyMatch[2] };
+  }
+
+  return { mes: '', anio: '' };
+};
 
 /**
  * Construye el Pedimento Unificado en formato AA-AAA-AAAA-AAAAAAA
- * AA = últimos 2 dígitos del año de Fecha de Pago (Índice 30)
- * AAA = sección aduanera (Índice 2)
- * AAAA = patente (Índice 0)
- * AAAAAAA = número de pedimento (Índice 1)
  */
 export const buildPedimentoUnificado = (
   patente: string,
@@ -31,54 +51,20 @@ export const buildPedimentoUnificado = (
 };
 
 /**
- * Transforma una fila cruda del archivo 501 en la fila de salida de 31 columnas.
- * Mapeo estricto por índice de columna del .asc.
+ * Construye las 6 columnas prefijo estándar:
+ * [Mes, Anio, Patente, Pedimento(crudo), SeccionAduanera, PedimentoUnificado]
  */
-const transform501Row = (row: string[]): string[] => {
-  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Construir Pedimento: AA(year de idx30)-AAA(idx2)-AAAA(idx0)-AAAAAAA(idx1)
-  const fechaPago = get(30);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  return [
-    pedimento,                                                      // Pedimento
-    get(2),                                                         // Clave de sección aduanera de despacho
-    TIPO_OPERACION[get(3)] || get(3),                               // Tipo de Operación
-    get(4),                                                         // Clave
-    TIPO_PEDIMENTO[get(28)] || get(28),                             // Tipo de Pedimento
-    formatDateYYYYMMDD(get(29)),                                    // Fecha de recepción de pedimento
-    formatDateYYYYMMDD(get(30)),                                    // Fecha de pago
-    get(9),                                                         // Tipo de cambio
-    get(10),                                                        // Fletes
-    get(11),                                                        // Seguros
-    get(12),                                                        // Embalajes
-    get(13),                                                        // Otros incrementales
-    get(14),                                                        // Otros deducibles
-    get(15),                                                        // Peso bruto de la mercancía
-    get(16),                                                        // Clave de medio de transporte de salida
-    MEDIO_TRANSPORTE[get(16)] || get(16),                           // Descripción medio transporte salida
-    get(17),                                                        // Clave de medio de transporte de arribo
-    MEDIO_TRANSPORTE[get(17)] || get(17),                           // Descripción medio transporte arribo
-    get(18),                                                        // Clave de medio de transporte entrada/salida
-    MEDIO_TRANSPORTE[get(18)] || get(18),                           // Descripción medio transporte entrada/salida
-    get(19),                                                        // Clave de destino de la mercancía
-    DESTINO_MERCANCIA[get(19)] || get(19),                          // Descripción destino mercancía
-    get(5),                                                         // Clave de sección aduanera de entrada
-    get(8),                                                         // CURP del agente o apoderado aduanal
-    get(20),                                                        // Nombre del contribuyente
-    [get(21), get(23), get(22), get(24), get(25), get(26), get(27)] // Dirección del contribuyente
-      .filter(Boolean).join(' '),
-    '0',                                                            // Transporte (Decrementables)
-    '0',                                                            // Seguro (Decrementables)
-    '0',                                                            // Carga (Decrementables)
-    '0',                                                            // Descarga (Decrementables)
-    '0',                                                            // Otros Decrementables
-  ];
+const buildPrefix = (patente: string, pedCrudo: string, seccion: string, fecha: string): string[] => {
+  const { mes, anio } = extractMesAnioFromFecha(fecha);
+  const yy = extractYearFromDateField(fecha);
+  const pedUnificado = buildPedimentoUnificado(patente, pedCrudo, seccion, yy);
+  return [mes, anio, patente, pedCrudo, seccion, pedUnificado];
 };
 
-/** Contexto inyectable desde la tabla 501 */
+// ===========================
+// CONTEXT 501
+// ===========================
+
 interface Context501 {
   tipoOperacion: string;
   clave: string;
@@ -86,328 +72,230 @@ interface Context501 {
   fechaRecepcion: string;
 }
 
-/**
- * Transforma una fila cruda del archivo 502 en la fila de salida de 11 columnas.
- */
+const emptyCtx: Context501 = { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+
+/** Construye lookup de contexto desde la tabla 501 enriquecida. */
+const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
+  const map = new Map<string, Context501>();
+  const pidx = PEDIMENTO_UNIFICADO_INDEX;
+  for (let i = 1; i < enriched501.length; i++) {
+    const row = enriched501[i];
+    if (row[pidx]) {
+      map.set(row[pidx], {
+        tipoOperacion: row[6] || '',
+        clave: row[7] || '',
+        tipoPedimento: row[8] || '',
+        fechaRecepcion: row[9] || '',
+      });
+    }
+  }
+  return map;
+};
+
+// ===========================
+// TRANSFORM FUNCTIONS (raw data, no translations, no date formatting)
+// ===========================
+
+const transform501Row = (row: string[]): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+  const prefix = buildPrefix(get(0), get(1), get(2), get(30));
+  return [
+    ...prefix,
+    get(3),                  // TipoOperacion (crudo)
+    get(4),                  // Clave
+    get(28),                 // TipoPedimento (crudo)
+    get(29),                 // FechaRecepcion (crudo)
+    get(30),                 // FechaPago (crudo)
+    get(6),                  // CurpContribuyente
+    get(7),                  // RFC
+    get(8),                  // CurpAgente
+    get(9),                  // TipoCambio
+    get(10),                 // Fletes
+    get(11),                 // Seguros
+    get(12),                 // Embalajes
+    get(13),                 // OtrosIncrementales
+    get(14),                 // OtrosDeducibles
+    get(15),                 // PesoBrutoMercancia
+    get(16),                 // MedioTransporteSalida (crudo)
+    get(17),                 // MedioTransporteArribo (crudo)
+    get(18),                 // MedioTransporteEntradaSalida (crudo)
+    get(19),                 // DestinoMercancia (crudo)
+    get(5),                  // SeccionAduaneraEntrada
+    get(20),                 // NombreContribuyente
+    get(21),                 // Calle
+    get(22),                 // NumInterior
+    get(23),                 // NumExterior
+    get(24),                 // CodigoPostal
+    get(25),                 // Municipio
+    get(26),                 // EntidadFederativa
+    get(27),                 // Pais
+    '0',                     // TransporteDecrementables
+    '0',                     // SeguroDecrementables
+    '0',                     // CargaDecrementables
+    '0',                     // DescargaDecrementables
+    '0',                     // OtrosDecrementables
+  ];
+};
+
 const transform502Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(8);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // RFC del transportista
-    get(4),                        // CURP del transportista
-    get(5),                        // Nombre del transportista
-    get(6),                        // Clave de país del transporte
-    get(7),                        // Identificador del transporte
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5), get(6), get(7),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 503 en la fila de salida de 8 columnas.
- */
 const transform503Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(5);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Número de guía o manifiesto
-    TIPO_GUIA[get(4)] || get(4),   // Clave de tipo de guía (H→HOUSE, M→MASTER)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 504 en la fila de salida de 9 columnas.
- */
 const transform504Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(5);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Número del contenedor
-    get(4),                        // Clave de tipo de contenedor
-    get(4),                        // Descripción del contenedor (valor crudo, sin traducción)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 505 en la fila de salida de 17 columnas.
- */
 const transform505Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(18);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
-  // Dirección: concatenar idx 13 + 15 + 14 + 17 + 10 + 16 (filter nulls)
-  const direccion = [get(13), get(15), get(14), get(17), get(10), get(16)]
-    .filter(Boolean).join(' ');
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    ctx.fechaRecepcion,            // Fecha de recepción de pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(4),                        // Número de la factura
-    formatDateYYYYMMDD(get(3)),    // Fecha de facturación
-    get(5),                        // Clave de término de facturación
-    get(7),                        // Valor en dólares
-    get(6),                        // Clave de moneda de facturación
-    get(8),                        // Valor en moneda extranjera
-    get(9),                        // Clave de país de facturación
-    get(12),                       // Proveedor de la mercancía
-    get(11),                       // Identificación fiscal del proveedor
-    direccion,                     // Dirección
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, ctx.fechaRecepcion, fechaPago,
+    get(4), get(3), get(5),
+    get(7), get(6), get(8), get(9),
+    get(12), get(11),
+    get(10), get(13), get(14), get(15), get(16), get(17),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 506 en la fila de salida de 9 columnas.
- */
 const transform506Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(5);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    TIPO_FECHA[get(3)] || get(3),  // Tipo de fecha (traducido vía Apéndice 21)
-    formatDateYYYYMMDD(get(4)),    // Fecha de operación
-    formatDateYYYYMMDD(fechaPago), // Fecha de validación o de pago real
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), fechaPago,
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 507 en la fila de salida de 10 columnas.
- */
 const transform507Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(7);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Identificador del caso
-    get(3),                        // Descripción del Identificador (valor crudo, sin traducción)
-    get(4),                        // Complemento 1
-    get(6),                        // Complemento 2
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5), get(6),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 508 en la fila de salida de 16 columnas.
- */
 const transform508Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(13);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Clave de institución emisora
-    get(4),                        // Número de cuenta
-    get(5),                        // Folio de la constancia
-    formatDateYYYYMMDD(get(6)),    // Fecha de la constancia
-    get(7),                        // Clave de tipo de cuenta
-    get(8),                        // Clave de garantía
-    get(9),                        // Valor unitario del título
-    get(10),                       // Total de la garantía
-    get(11),                       // Cantidad en unidades de medida del precio estimado
-    get(12),                       // Títulos asignados
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5), get(6), get(7), get(8), get(9), get(10), get(11), get(12),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 509 en la fila de salida de 12 columnas.
- */
 const transform509Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(7);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Clave de contribución
-    get(3),                        // Contribución (valor crudo, sin catálogo)
-    get(3),                        // Descripción de la contribución (valor crudo, sin catálogo)
-    get(4),                        // Tasa de la contribución
-    get(5),                        // Clave de tipo de la tasa
-    get(5),                        // Descripción de la tasa (valor crudo, sin catálogo)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 510 en la fila de salida de 11 columnas.
- */
 const transform510Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(7);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Clave de contribución
-    get(3),                        // Descripción de la contribución (valor crudo, sin catálogo)
-    get(4),                        // Clave de forma de pago
-    get(4),                        // Descripción forma de pago (valor crudo, sin catálogo)
-    get(5),                        // Importe del pago
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 511 en la fila de salida de 9 columnas.
- */
 const transform511Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(6);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Secuencia de la observación
-    get(4),                        // Observaciones
-    formatDateYYYYMMDD(fechaPago), // Fecha de validación o de pago real
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), fechaPago,
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 512 en la fila de salida de 13 columnas.
- * Construye dos llaves: Pedimento (llave A) y Pedimento original (llave B).
- */
-/**
- * Transforma una fila cruda del archivo 520 en la fila de salida de 9 columnas.
- * Construye dirección concatenando múltiples campos.
- */
+const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
+  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
+  const fechaPago = get(12);
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
+
+  // Pedimento Original Unificado
+  const fechaOpOrig = get(7);
+  const yyB = extractYearFromDateField(fechaOpOrig);
+  const pedOriginal = buildPedimentoUnificado(get(3), get(4), get(5), yyB);
+
+  return [
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    pedOriginal, get(6), fechaOpOrig, get(8), get(9), get(10),
+  ];
+};
+
 const transform520Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(11);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
-  // Dirección: idx 5 (Calle) + idx 7 (NumExt) + idx 6 (NumInt) + idx 8 (CP) + idx 9 (Municipio) + idx 10 (País)
-  const direccion = [get(5), get(7), get(6), get(8), get(9), get(10)]
-    .filter(Boolean).join(' ');
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago
-    get(3),                        // Identificación fiscal del destinatario
-    get(4),                        // Nombre del destinatario de la mercancía
-    direccion,                     // Dirección Destinatario
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7), get(8), get(9), get(10),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 551 en la fila de salida de 34 columnas.
- * Incluye cálculo de Precio Unitario USD = ValorDolares / CantidadUMComercial.
- */
 const transform551Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(29);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
 
   // Precio Unitario USD = ValorDolares (idx10) / CantidadUMComercial (idx11)
   const valorDolares = parseFloat(get(10)) || 0;
@@ -415,465 +303,250 @@ const transform551Row = (row: string[], lookup501: Map<string, Context501>): str
   const precioUnitarioUSD = cantComercial !== 0 ? (valorDolares / cantComercial).toString() : '0';
 
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de Pago Real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Subdivisión de la fracción arancelaria
-    get(6),                        // Descripción de la mercancía
-    get(7),                        // Precio Unitario MN
-    get(8),                        // Valor Aduana MN Pedimento
-    get(9),                        // Valor Comercial MN Pedimento
-    get(10),                       // Valor en dólares
-    get(11),                       // Cantidad de mercancía en unidades de medida comercial
-    get(12),                       // Clave de unidad de medida comercial
-    get(12),                       // Unidad de medida comercial (valor crudo, sin catálogo)
-    get(13),                       // Cantidad de mercancía en unidades de medida de la tarifa
-    get(14),                       // Clave de unidad de medida de la tarifa
-    get(14),                       // Unidad de Tarifa (valor crudo, sin catálogo)
-    get(15),                       // Valor agregado
-    get(16),                       // Clave de vinculación
-    get(17),                       // Clave de método de valorización
-    get(17),                       // Descripción de método de valorización (valor crudo, sin catálogo)
-    get(18),                       // Código de la mercancía o producto
-    get(19),                       // Marca de la mercancía o producto
-    get(20),                       // Modelo de la mercancía o producto
-    get(21),                       // Clave de país origen / destino
-    get(22),                       // Clave de país Comprador / vendedor
-    get(23),                       // Clave de entidad federativa de origen
-    get(24),                       // Clave de entidad federativa de destino
-    get(25),                       // Clave de entidad federativa del comprador
-    get(26),                       // Clave de entidad federativa del vendedor
-    precioUnitarioUSD,             // Precio Unitario USD (calculado)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5), get(6),
+    get(7), get(8), get(9), get(10),
+    get(11), get(12),
+    get(13), get(14),
+    get(15), get(16), get(17),
+    get(18), get(19), get(20),
+    get(21), get(22),
+    get(23), get(24), get(25), get(26),
+    precioUnitarioUSD,
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 552 en la fila de salida de 10 columnas.
- * VIN y todos los campos se mantienen como texto.
- */
 const transform552Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(7);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // VIN o número de serie
-    get(6),                        // Kilometraje del vehículo
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4), get(5), get(6),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 553 en la fila de salida de 14 columnas.
- * Todos los campos se mantienen como texto. Descripción del permiso = valor crudo de idx 5.
- */
 const transform553Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(10);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Clave del permiso
-    get(5),                        // Descripción del permiso (valor crudo, sin catálogo)
-    get(6),                        // Firma de descargo
-    get(7),                        // Número del permiso
-    get(8),                        // Valor comercial en dólares
-    get(9),                        // Cantidad de mercancía en unidades de medida de la tarifa
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7), get(8), get(9),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 554 en la fila de salida de 12 columnas.
- * Todos los campos se mantienen como texto. Descripción del Identificador = valor crudo de idx 5.
- */
 const transform554Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(8);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de Pago Real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Clave de caso
-    get(5),                        // Descripción del Identificador (valor crudo, sin catálogo)
-    get(6),                        // Identificador del caso
-    get(7),                        // Complemento del caso
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7),
   ];
 };
 
-const transform512Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
-  const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Llave A: Pedimento — año desde idx 12
-  const fechaPago = get(12);
-  const yyA = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yyA);
-
-  // Llave B: Pedimento original — año desde idx 7
-  const fechaOpOrig = get(7);
-  const yyB = extractYearFromDateField(fechaOpOrig);
-  const pedimentoOriginal = buildPedimentoUnificado(get(3), get(4), get(5), yyB);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
-  return [
-    pedimento,                          // Pedimento (Llave A)
-    get(2),                             // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,                  // Tipo de Operación (desde 501)
-    ctx.clave,                          // Clave (desde 501)
-    ctx.tipoPedimento,                  // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago),      // Fecha de pago
-    pedimentoOriginal,                  // Pedimento original (Llave B)
-    get(6),                             // Clave de pedimento original
-    formatDateYYYYMMDD(fechaOpOrig),    // Fecha de la operación original
-    get(8),                             // Fracción arancelaria original
-    get(9),                             // Clave de unidad de medida original
-    get(9),                             // Unidad de medida original (valor crudo, sin catálogo)
-    get(10),                            // Cantidad de mercancía descargada
-  ];
-};
-
-/**
- * Transforma una fila cruda del archivo 555 en la fila de salida de 17 columnas.
- * Cuentas Aduaneras de Garantía de la Partida. Dos fechas: idx 14 y idx 8.
- */
 const transform555Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(14);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Clave de institución emisora
-    get(6),                        // Número de cuenta
-    get(7),                        // Folio de la constancia
-    formatDateYYYYMMDD(get(8)),    // Fecha de la constancia
-    get(9),                        // Clave de garantía
-    get(10),                       // Valor unitario del título
-    get(11),                       // Total de la garantía
-    get(12),                       // Cantidad en unidades de medida del precio estimado
-    get(13),                       // Títulos asignados
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7), get(8),
+    get(9), get(10), get(11),
+    get(12), get(13),
   ];
 };
 
-/**
- * Construye lookup de contexto desde la tabla 501 ya enriquecida.
-
-/**
- * Transforma una fila cruda del archivo 556 en la fila de salida de 13 columnas.
- * Tasas de la Partida. Campos idx 5 y idx 7 duplicados (clave + descripción cruda).
- */
 const transform556Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(8);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Clave de contribución
-    get(5),                        // Descripción de la contribución (valor crudo, sin catálogo)
-    get(6),                        // Tasa de la contribución
-    get(7),                        // Clave de tipo de la tasa
-    get(7),                        // Descripción de la tasa (valor crudo, sin catálogo)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo 557 en la fila de salida de 13 columnas.
- * Contribuciones de la Partida. Campos idx 5 y idx 6 duplicados (clave + descripción cruda).
- */
 const transform557Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(8);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Clave de contribución
-    get(5),                        // Descripción de la contribución (valor crudo, sin catálogo)
-    get(6),                        // Clave de forma de pago
-    get(6),                        // Descripción forma de pago (valor crudo, sin catálogo)
-    get(7),                        // Importe del pago
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), get(6), get(7),
   ];
 };
 
-/**
- * Tabla 558 – Observaciones de la Partida.
- * Fecha en idx 7. Observaciones (idx 6) preservadas íntegras sin alteración.
- */
 const transform558Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
   const fechaPago = get(7);
-  const yy = extractYearFromDateField(fechaPago);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
-  // Observaciones (idx 6): se preserva el valor crudo sin trim invasivo
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   const observaciones = 6 < row.length ? row[6] : '';
-
   return [
-    pedimento,
-    get(2),                        // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,             // Tipo de Operación (desde 501)
-    ctx.clave,                     // Clave de Pedimento (desde 501)
-    ctx.tipoPedimento,             // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPago), // Fecha de pago real
-    get(3),                        // Fracción arancelaria
-    get(4),                        // Secuencia de la fracción arancelaria
-    get(5),                        // Secuencia de la observación
-    observaciones,                 // Observaciones (íntegras, sin alteración)
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
+    get(3), get(4),
+    get(5), observaciones,
   ];
 };
 
-/**
- * Tabla 701 – Rectificaciones y Pedimentos Anteriores.
- * Dos llaves de pedimento: A (principal, año en idx 13) y B (anterior, año en idx 9).
- * JOIN con 501: solo 2 campos (Tipo de Operación, Tipo de Pedimento).
- * Tres campos de fecha: idx 13, idx 4, idx 9 → DD/MM/YYYY.
- */
 const transform701Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Llave A: Pedimento principal
   const fechaPagoReal = get(13);
-  const yyA = extractYearFromDateField(fechaPagoReal);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yyA);
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPagoReal);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
 
-  // JOIN con 501: solo Tipo de Operación y Tipo de Pedimento
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
-  // Llave B: Pedimento Anterior Unificado (condicional: vacío si idx 9 vacío)
   const fechaOpAnterior = get(9);
-  let pedimentoAnterior = '';
+  let pedAnterior = '';
   if (fechaOpAnterior) {
     const yyB = extractYearFromDateField(fechaOpAnterior);
-    pedimentoAnterior = buildPedimentoUnificado(get(6), get(5), get(7), yyB);
+    pedAnterior = buildPedimentoUnificado(get(6), get(5), get(7), yyB);
   }
 
   return [
-    pedimento,                              // Pedimento (Llave A)
-    get(2),                                 // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,                      // Tipo de Operación (desde 501)
-    ctx.tipoPedimento,                      // Tipo de Pedimento (desde 501)
-    formatDateYYYYMMDD(fechaPagoReal),      // Fecha de pago real
-    get(3),                                 // Clave de documento
-    formatDateYYYYMMDD(get(4)),             // Fecha de pago
-    pedimentoAnterior,                      // Pedimento Anterior Unificado (Llave B)
-    get(8),                                 // Documento Anterior
-    fechaOpAnterior ? formatDateYYYYMMDD(fechaOpAnterior) : '', // Fecha de Operación Anterior
-    get(10),                                // Pedimento Original Crudo
-    get(11),                                // Patente Original
-    get(12),                                // Sección Aduanera Original
-    get(5),                                 // Número de Pedimento Anterior Crudo
-    get(6),                                 // Patente Anterior
+    ...prefix,
+    ctx.tipoOperacion, ctx.tipoPedimento,
+    fechaPagoReal, get(3), get(4),
+    pedAnterior, get(8), fechaOpAnterior,
+    get(10), get(11), get(12), get(5), get(6),
   ];
 };
 
-/**
- * Tabla 702 – Diferencias de Contribuciones a Nivel Pedimento.
- * Pedimento: AA(año idx7)-AAA(idx2)-AAAA(idx0)-AAAAAAA(idx1).
- * JOIN con 501: Tipo de Operación y Clave.
- * Tipo de Pedimento viene del propio archivo (idx 6).
- * Descripción de contribución y forma de pago = valor crudo (sin catálogo).
- */
 const transform702Row = (row: string[], lookup501: Map<string, Context501>): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Pedimento: año desde idx 7 (FechaPagoReal)
   const fechaPagoReal = get(7);
-  const yy = extractYearFromDateField(fechaPagoReal);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
-  // JOIN con 501: solo Tipo de Operación y Clave
-  const ctx = lookup501.get(pedimento) || { tipoOperacion: '', clave: '', tipoPedimento: '', fechaRecepcion: '' };
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaPagoReal);
+  const ctx = lookup501.get(prefix[5]) || emptyCtx;
   return [
-    pedimento,                              // Pedimento
-    get(2),                                 // Clave de sección aduanera de despacho
-    ctx.tipoOperacion,                      // Tipo de Operación (desde 501)
-    ctx.clave,                              // Clave (desde 501)
-    get(6),                                 // Tipo de Pedimento (del propio archivo)
-    formatDateYYYYMMDD(fechaPagoReal),      // Fecha de pago real
-    get(3),                                 // Clave de contribución
-    get(3),                                 // Descripción de la contribución (valor crudo)
-    get(4),                                 // Clave de forma de pago
-    get(4),                                 // Descripción forma de pago (valor crudo)
-    get(5),                                 // Importe del pago
+    ...prefix,
+    ctx.tipoOperacion, ctx.clave, get(6), fechaPagoReal,
+    get(3), get(4), get(5),
   ];
 };
 
-/**
- * Tabla Inci – Incidencias / Reconocimiento Aduanero.
- * Sin FechaPagoReal: año extraído de FechaSeleccion (idx 14).
- * Sin JOIN con 501: Tipo de Operación viene del propio archivo (idx 12).
- * 15 columnas de salida. Horas preservadas como texto.
- */
 const transformInciRow = (row: string[]): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Pedimento: año desde idx 14 (FechaSeleccion)
   const fechaSeleccion = get(14);
-  const yy = extractYearFromDateField(fechaSeleccion);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaSeleccion);
   return [
-    pedimento,                              // Pedimento
-    get(2),                                 // Clave de sección aduanera de despacho
-    get(12),                                // Tipo de Operación
-    get(11),                                // Clave de Documento
-    get(3),                                 // Consecutivo de Remesa
-    get(4),                                 // Número de Selección
-    formatDateYYYYMMDD(get(5)),             // Fecha Inicio Reconocimiento
-    get(6),                                 // Hora Inicio Reconocimiento
-    formatDateYYYYMMDD(get(7)),             // Fecha Fin Reconocimiento
-    get(8),                                 // Hora Fin Reconocimiento
-    get(9),                                 // Fracción Arancelaria
-    get(10),                                // Secuencia de la Fracción
-    get(13),                                // Grado de Incidencia
-    formatDateYYYYMMDD(fechaSeleccion),     // Fecha de Selección
-    get(0),                                 // Patente Original Cruda
+    ...prefix,
+    get(12), get(11), get(3), get(4),
+    get(5), get(6), get(7), get(8),
+    get(9), get(10), get(13), fechaSeleccion, get(0),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo Sel (Selección Automatizada / Semáforo Fiscal).
- * 10 columnas de salida. Sin JOIN con 501.
- * Pedimento construido desde FechaSeleccion (idx 5) en lugar de FechaPagoReal.
- */
 const transformSelRow = (row: string[]): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  // Pedimento: año desde idx 5 (FechaSeleccion)
   const fechaSeleccion = get(5);
-  const yy = extractYearFromDateField(fechaSeleccion);
-  const pedimento = buildPedimentoUnificado(get(0), get(1), get(2), yy);
-
+  const prefix = buildPrefix(get(0), get(1), get(2), fechaSeleccion);
   return [
-    pedimento,                              // Pedimento
-    get(2),                                 // Clave de sección aduanera de despacho
-    get(9),                                 // Tipo de Operación (directo, sin catálogo)
-    get(8),                                 // Clave de Documento
-    get(3),                                 // Consecutivo de Remesa
-    get(4),                                 // Número de Selección
-    formatDateYYYYMMDD(fechaSeleccion),     // Fecha de Selección
-    get(6),                                 // Hora de Selección (texto crudo)
-    get(7),                                 // Resultado del Semáforo Fiscal (crudo, sin catálogo)
-    get(0),                                 // Patente Original Cruda
+    ...prefix,
+    get(9), get(8), get(3), get(4),
+    fechaSeleccion, get(6), get(7), get(0),
   ];
 };
 
-/**
- * Transforma una fila cruda del archivo Resumen en 7 columnas.
- * Sin llave Pedimento, sin JOIN con 501.
- */
 const transformResumenRow = (row: string[]): string[] => {
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
-
-  return [
-    get(0),                            // Folio de Extracción
-    get(1),                            // RFC o Patente Consultada
-    formatDateYYYYMMDD(get(2)),        // Fecha Inicial de Consulta
-    formatDateYYYYMMDD(get(3)),        // Fecha Final de Consulta
-    formatDateYYYYMMDD(get(4)),        // Fecha de Ejecución del SAT
-    get(5),                            // Total de Fracciones Extraídas
-    get(6),                            // Total de Contribuciones Extraídas
-  ];
+  return [get(0), get(1), get(2), get(3), get(4), get(5), get(6)];
 };
 
-/** Construye el mapa de contexto desde la tabla 501 enriquecida. */
-const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
-  const map = new Map<string, Context501>();
-  for (let i = 1; i < enriched501.length; i++) {
-    const row = enriched501[i];
-    if (row[0]) {
-      map.set(row[0], {
-        tipoOperacion: row[2] || '',
-        clave: row[3] || '',
-        tipoPedimento: row[4] || '',
-        fechaRecepcion: row[5] || '',
-      });
-    }
+// ===========================
+// ENRICHMENT ENGINE
+// ===========================
+
+/** Helper: procesa una tabla con su transformador */
+const processTable = (
+  fileKey: string,
+  dataRows: string[][],
+  transformer: (row: string[]) => string[],
+  onLog: (msg: string) => void,
+  minFields: number = 3
+): string[][] => {
+  const headers = COLUMN_HEADERS[fileKey];
+  if (!headers) return [[`Error: No headers for ${fileKey}`]];
+  const enrichedRows: string[][] = [headers];
+  let validCount = 0;
+  let invalidCount = 0;
+  for (const row of dataRows) {
+    if (row.length < minFields) { invalidCount++; continue; }
+    try {
+      enrichedRows.push(transformer(row));
+      validCount++;
+    } catch (e) { invalidCount++; }
   }
-  return map;
+  onLog(`✅ ${fileKey}: ${validCount} registros transformados (${invalidCount} inválidos)`);
+  return enrichedRows;
+};
+
+/** Helper: detecta y salta fila de encabezado original si existe */
+const skipHeaderRow = (rows: string[][], onLog: (msg: string) => void, fileKey: string): string[][] => {
+  if (rows.length > 0 && rows[0].length >= 3 &&
+    (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))) {
+    onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`);
+    return rows.slice(1);
+  }
+  return rows;
+};
+
+// Mapas de transformadores con contexto 501
+const ctxTransformers: Record<string, (row: string[], ctx: Map<string, Context501>) => string[]> = {
+  '502': transform502Row,
+  '503': transform503Row,
+  '504': transform504Row,
+  '505': transform505Row,
+  '506': transform506Row,
+  '507': transform507Row,
+  '508': transform508Row,
+  '509': transform509Row,
+  '510': transform510Row,
+  '511': transform511Row,
+  '512': transform512Row,
+  '520': transform520Row,
+  '551': transform551Row,
+  '552': transform552Row,
+  '553': transform553Row,
+  '554': transform554Row,
+  '555': transform555Row,
+  '556': transform556Row,
+  '557': transform557Row,
+  '558': transform558Row,
+  '701': transform701Row,
+  '702': transform702Row,
+};
+
+// Transformadores sin contexto 501
+const noCtxTransformers: Record<string, (row: string[]) => string[]> = {
+  'Inci': transformInciRow,
+  'Sel': transformSelRow,
+  'Resumen': transformResumenRow,
 };
 
 /**
  * Enriquece los datos procesados: aplica transformación por tabla y agrega encabezados.
- * Para tabla 501: mapeo por índice con transformaciones especiales.
- * Para otras tablas: lógica legacy (prepend Pedimento Unificado).
+ * Mes y Año se extraen dinámicamente de la fecha de pago de CADA fila.
+ * Valores crudos: sin traducciones de catálogos, sin formateo de fechas.
  */
 export const enrichWithPedimentoUnificado = (
   data: ProcessedData,
@@ -881,32 +554,12 @@ export const enrichWithPedimentoUnificado = (
 ): ProcessedData => {
   const enrichedData: ProcessedData = {};
 
-  // No global detectedYear — each row extracts its own year from date fields
-  onLog(`📋 Extracción de año: modo per-row (sin detectedYear global)`);
+  onLog(`📋 Extracción de Mes/Año: modo per-row desde fecha de pago de cada registro`);
 
   // === PHASE 1: Process 501 first (needed for context injection) ===
   if (data['501']) {
-    const rows = data['501'];
-    const dataRows = rows.length > 0 && rows[0].length >= 3 &&
-      (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
-      ? (onLog(`🔄 501: Encabezado original detectado y reemplazado`), rows.slice(1))
-      : rows;
-
-    const headers = COLUMN_HEADERS['501'];
-    const enrichedRows: string[][] = [headers];
-    let validCount = 0;
-    let invalidCount = 0;
-
-    for (const row of dataRows) {
-      if (row.length < 3) { invalidCount++; continue; }
-      try {
-        enrichedRows.push(transform501Row(row));
-        validCount++;
-      } catch (e) { invalidCount++; }
-    }
-
-    enrichedData['501'] = enrichedRows;
-    onLog(`✅ 501: ${validCount} registros transformados (${invalidCount} inválidos)`);
+    const dataRows = skipHeaderRow(data['501'], onLog, '501');
+    enrichedData['501'] = processTable('501', dataRows, transform501Row, onLog);
   }
 
   // Build context lookup from enriched 501
@@ -919,489 +572,32 @@ export const enrichWithPedimentoUnificado = (
       continue;
     }
 
-    const dataRows = rows.length > 0 && rows[0].length >= 3 &&
-      (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))
-      ? (onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`), rows.slice(1))
-      : rows;
+    const dataRows = skipHeaderRow(rows, onLog, fileKey);
 
-    if (fileKey === '502') {
-      const headers = COLUMN_HEADERS['502'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform502Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 502: ${validCount} registros transformados (${invalidCount} inválidos)`);
+    if (ctxTransformers[fileKey]) {
+      enrichedData[fileKey] = processTable(
+        fileKey, dataRows,
+        (row) => ctxTransformers[fileKey](row, context501),
+        onLog
+      );
       continue;
     }
 
-    if (fileKey === '503') {
-      const headers = COLUMN_HEADERS['503'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform503Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 503: ${validCount} registros transformados (${invalidCount} inválidos)`);
+    if (noCtxTransformers[fileKey]) {
+      enrichedData[fileKey] = processTable(
+        fileKey, dataRows,
+        noCtxTransformers[fileKey],
+        onLog,
+        fileKey === 'Resumen' ? 1 : 3
+      );
       continue;
     }
 
-    if (fileKey === '504') {
-      const headers = COLUMN_HEADERS['504'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform504Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 504: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '505') {
-      const headers = COLUMN_HEADERS['505'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform505Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 505: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-    if (fileKey === '506') {
-      const headers = COLUMN_HEADERS['506'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform506Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 506: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '507') {
-      const headers = COLUMN_HEADERS['507'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform507Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 507: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '508') {
-      const headers = COLUMN_HEADERS['508'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform508Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 508: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '509') {
-      const headers = COLUMN_HEADERS['509'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform509Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 509: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '510') {
-      const headers = COLUMN_HEADERS['510'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform510Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 510: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '511') {
-      const headers = COLUMN_HEADERS['511'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform511Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 511: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '512') {
-      const headers = COLUMN_HEADERS['512'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform512Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 512: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '551') {
-      const headers = COLUMN_HEADERS['551'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform551Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 551: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '552') {
-      const headers = COLUMN_HEADERS['552'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform552Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 552: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '553') {
-      const headers = COLUMN_HEADERS['553'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform553Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 553: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '554') {
-      const headers = COLUMN_HEADERS['554'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform554Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 554: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '555') {
-      const headers = COLUMN_HEADERS['555'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform555Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 555: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '556') {
-      const headers = COLUMN_HEADERS['556'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform556Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 556: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '557') {
-      const headers = COLUMN_HEADERS['557'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform557Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 557: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '558') {
-      const headers = COLUMN_HEADERS['558'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform558Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 558: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '701') {
-      const headers = COLUMN_HEADERS['701'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform701Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 701: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '702') {
-      const headers = COLUMN_HEADERS['702'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform702Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 702: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === 'Inci') {
-      const headers = COLUMN_HEADERS['Inci'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transformInciRow(row));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ Inci: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === 'Sel') {
-      const headers = COLUMN_HEADERS['Sel'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transformSelRow(row));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ Sel: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === 'Resumen') {
-      const headers = COLUMN_HEADERS['Resumen'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        try {
-          enrichedRows.push(transformResumenRow(row));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ Resumen: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    if (fileKey === '520') {
-      const headers = COLUMN_HEADERS['520'];
-      const enrichedRows: string[][] = [headers];
-      let validCount = 0;
-      let invalidCount = 0;
-
-      for (const row of dataRows) {
-        if (row.length < 3) { invalidCount++; continue; }
-        try {
-          enrichedRows.push(transform520Row(row, context501));
-          validCount++;
-        } catch (e) { invalidCount++; }
-      }
-
-      enrichedData[fileKey] = enrichedRows;
-      onLog(`✅ 520: ${validCount} registros transformados (${invalidCount} inválidos)`);
-      continue;
-    }
-
-    const sampleColCount = rows[0].length + 1;
-    const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(sampleColCount, fileKey);
-    if (!COLUMN_HEADERS[fileKey]) {
-      onLog(`ℹ️ ${fileKey}: Usando transformación genérica (sin mapeo específico)`);
-    }
+    // === FALLBACK: archivos sin transformador dedicado ===
+    onLog(`ℹ️ ${fileKey}: Usando transformación genérica (sin mapeo específico)`);
+    const sampleRow = dataRows[0] || [];
+    const totalCols = 6 + Math.max(sampleRow.length - 3, 0);
+    const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(totalCols, fileKey);
     const enrichedRows: string[][] = [headers];
 
     let pedimentosBuild = 0;
@@ -1409,7 +605,7 @@ export const enrichWithPedimentoUnificado = (
 
     for (const row of dataRows) {
       if (row.length < 3) {
-        enrichedRows.push(['', ...row]);
+        enrichedRows.push(['', '', '', '', '', '', ...row]);
         pedimentosInvalid++;
         continue;
       }
@@ -1419,24 +615,24 @@ export const enrichWithPedimentoUnificado = (
       const seccion = row[2].trim();
 
       if (patente && indice && seccion && /^\d+$/.test(patente) && /^\d+$/.test(indice) && /^\d+$/.test(seccion)) {
-        // Extract year per-row: scan fields for a date pattern
-        let yy = '00';
+        // Extract date per-row for Mes/Año
+        let fechaCandidate = '';
         for (const field of row) {
           const candidate = field.trim();
           if (candidate.length >= 8 && /^\d{4}/.test(candidate)) {
-            yy = extractYearFromDateField(candidate);
-            if (yy !== '00') break;
+            fechaCandidate = candidate;
+            break;
           }
           if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}/.test(candidate)) {
-            yy = extractYearFromDateField(candidate);
-            if (yy !== '00') break;
+            fechaCandidate = candidate;
+            break;
           }
         }
-        const pedimento = buildPedimentoUnificado(patente, indice, seccion, yy);
-        enrichedRows.push([pedimento, ...row]);
+        const prefix = buildPrefix(patente, indice, seccion, fechaCandidate);
+        enrichedRows.push([...prefix, ...row.slice(3)]);
         pedimentosBuild++;
       } else {
-        enrichedRows.push(['', ...row]);
+        enrichedRows.push(['', '', patente, indice, seccion, '', ...row.slice(3)]);
         pedimentosInvalid++;
       }
     }
@@ -1450,8 +646,9 @@ export const enrichWithPedimentoUnificado = (
 
   const totalPedimentos = new Set<string>();
   if (enrichedData['501']) {
+    const pidx = PEDIMENTO_UNIFICADO_INDEX;
     for (let i = 1; i < enrichedData['501'].length; i++) {
-      const ped = enrichedData['501'][i][0];
+      const ped = enrichedData['501'][i][pidx];
       if (ped) totalPedimentos.add(ped);
     }
   }
@@ -1468,6 +665,7 @@ export const validateProcessedData = (
   onLog: (message: string) => void
 ): string[] => {
   const warnings: string[] = [];
+  const pidx = PEDIMENTO_UNIFICADO_INDEX;
 
   if (!data['501']) {
     const w = 'Falta archivo crítico: 501 - Datos generales';
@@ -1490,7 +688,7 @@ export const validateProcessedData = (
     let emptyCount = 0;
 
     for (let i = 1; i < rows.length; i++) {
-      const pedimento = rows[i][0];
+      const pedimento = rows[i][pidx];
       if (!pedimento) {
         emptyCount++;
       } else if (!PEDIMENTO_REGEX.test(pedimento)) {
@@ -1513,12 +711,12 @@ export const validateProcessedData = (
   if (data['501'] && data['551']) {
     const pedimentos501 = new Set<string>();
     for (let i = 1; i < data['501'].length; i++) {
-      if (data['501'][i][0]) pedimentos501.add(data['501'][i][0]);
+      if (data['501'][i][pidx]) pedimentos501.add(data['501'][i][pidx]);
     }
 
     let orphanCount = 0;
     for (let i = 1; i < data['551'].length; i++) {
-      const ped = data['551'][i][0];
+      const ped = data['551'][i][pidx];
       if (ped && !pedimentos501.has(ped)) orphanCount++;
     }
 

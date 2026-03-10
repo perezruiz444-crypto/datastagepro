@@ -12,7 +12,6 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
     const ascFiles = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.asc'));
     if (ascFiles.length === 0) return { month: null, year: null };
 
-    // Try 501 first, then any other .asc file
     const file501 = ascFiles.find(name => name.includes('501'));
     const targetFiles = file501 ? [file501, ...ascFiles.filter(f => f !== file501)] : ascFiles;
 
@@ -27,7 +26,6 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
         const parts = line.split('|');
         parts.forEach(field => {
           const trimmed = field.trim();
-          // YYYYMMDD format
           if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
             const yr = parseInt(trimmed.substring(0, 4), 10);
             const mo = parseInt(trimmed.substring(4, 6), 10);
@@ -36,7 +34,6 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
               yearCounts[yr] = (yearCounts[yr] || 0) + 1;
             }
           }
-          // DD/MM/YYYY or DD-MM-YYYY format
           const dateMatch = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
           if (dateMatch) {
             const mo = parseInt(dateMatch[2], 10);
@@ -49,7 +46,6 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
         });
       });
 
-      // If we already have enough data, stop scanning more files
       const totalCounts = Object.values(monthCounts).reduce((a, b) => a + b, 0);
       if (totalCounts >= 20) break;
     }
@@ -149,7 +145,6 @@ export const processZipFile = async (
     onLog(`⚠️ ATENCIÓN: Faltan archivos críticos: ${missingCritical.map(id => `${id} (${FILE_NAMES[id] || 'N/A'})`).join(', ')}`);
   }
 
-  // Enrich with Pedimento Unificado + headers
   onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
   const enrichedData = enrichWithPedimentoUnificado(processedData, onLog);
   onLog('--- Validando integridad de datos ---');
@@ -157,6 +152,10 @@ export const processZipFile = async (
   return enrichedData;
 };
 
+/**
+ * Consolidación anual: Mes y Año ya vienen incluidos en cada fila desde el transform.
+ * Solo concatena datos de cada mes sin inyectar columnas adicionales.
+ */
 export const consolidateAnnualData = (
   monthlyData: { month: string; data: ProcessedData }[],
   onLog: (message: string) => void
@@ -186,20 +185,13 @@ export const consolidateAnnualData = (
       if (!consolidated[fileKey]) {
         consolidated[fileKey] = [];
         if (records.length > 0) {
-          // First row is header (from enrichment) - add "Mes" column after "Pedimento"
-          const header = [...records[0]];
-          header.splice(1, 0, 'Mes');
-          consolidated[fileKey].push(header);
+          // Header row — Mes/Anio already in headers from transform
+          consolidated[fileKey].push([...records[0]]);
         }
       }
-      // Skip header row (index 0), add month column to data rows
+      // Data rows already contain Mes/Anio from per-row extraction
       const dataRows = records.slice(1);
-      const recordsWithMonth = dataRows.map(record => {
-        const row = [...record];
-        row.splice(1, 0, month);
-        return row;
-      });
-      consolidated[fileKey].push(...recordsWithMonth);
+      consolidated[fileKey].push(...dataRows.map(r => [...r]));
     });
   });
 
@@ -207,6 +199,10 @@ export const consolidateAnnualData = (
   return consolidated;
 };
 
+/**
+ * Procesamiento histórico: Mes y Año ya vienen incluidos en cada fila desde el transform.
+ * Solo concatena datos de cada ZIP sin inyectar columnas adicionales.
+ */
 export const processHistoricalData = async (
   files: File[],
   onLog: (msg: string) => void,
@@ -215,52 +211,39 @@ export const processHistoricalData = async (
 ): Promise<{ data: ProcessedData; yearRange: string }> => {
   const consolidated: ProcessedData = {};
   const yearsSet = new Set<number>();
-  const monthsPerYear: Record<number, Set<string>> = {};
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     onLog(`--- [${i + 1}/${files.length}] Procesando ZIP: ${file.name} ---`);
     onProgress({ total: Math.round((i / files.length) * 100), file: 0, fileName: file.name });
 
-    const { month, year } = await detectPeriodFromZipFile(file);
-    const detectedMonth = month || 'Desconocido';
-    const detectedYear = year || new Date().getFullYear();
-    onLog(`Periodo detectado: ${detectedMonth} ${detectedYear}`);
+    const { year } = await detectPeriodFromZipFile(file);
+    if (year) {
+      yearsSet.add(year);
+      onLog(`Año detectado: ${year}`);
+    }
 
-    yearsSet.add(detectedYear);
-    if (!monthsPerYear[detectedYear]) monthsPerYear[detectedYear] = new Set();
-    monthsPerYear[detectedYear].add(detectedMonth);
+    // Process ZIP — Mes/Anio embedded per-row by transform
+    const data = await processZipFile(file, onLog, onProgress, cancellationSignal, year || undefined);
 
-    // Process ZIP with full transformations
-    const data = await processZipFile(file, onLog, onProgress, cancellationSignal, detectedYear);
-
-    // Merge immediately into consolidated, then discard reference
+    // Merge into consolidated
     Object.entries(data).forEach(([fileKey, records]) => {
       if (!consolidated[fileKey]) {
         consolidated[fileKey] = [];
         if (records.length > 0) {
-          const header = [...records[0]];
-          header.splice(1, 0, 'Año', 'Mes');
-          consolidated[fileKey].push(header);
+          consolidated[fileKey].push([...records[0]]);
         }
       }
       const dataRows = records.slice(1);
-      const enrichedRows = dataRows.map(row => {
-        const r = [...row];
-        r.splice(1, 0, String(detectedYear), detectedMonth);
-        return r;
-      });
-      consolidated[fileKey].push(...enrichedRows);
+      consolidated[fileKey].push(...dataRows.map(r => [...r]));
     });
 
-    // Let GC collect the per-ZIP data
     onLog(`♻️ ZIP ${file.name} procesado y liberado de memoria`);
   }
 
-  // Determine year range
   const years = Array.from(yearsSet).sort();
-  const minYear = years[0];
-  const maxYear = years[years.length - 1];
+  const minYear = years[0] || 0;
+  const maxYear = years[years.length - 1] || 0;
   const yearRange = minYear === maxYear ? `${minYear}` : `${minYear}-${maxYear}`;
 
   onLog(`✅ Histórico generado: ${Object.keys(consolidated).length} tablas, rango ${yearRange}`);
@@ -271,9 +254,10 @@ const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
   if (format === ExportFormat.TEXT) return data;
 
   return data.map((row, rowIndex) => {
-    if (rowIndex === 0) return row; // Keep headers as text
+    if (rowIndex === 0) return row;
     return row.map((cell, colIndex) => {
-      if (colIndex === 0) return cell; // Keep Pedimento column as text always
+      // Keep first 6 columns as text (Mes, Anio, Patente, Pedimento, SeccionAduanera, PedimentoUnificado)
+      if (colIndex <= 5) return cell;
       if (cell === '' || cell === null || cell === undefined) return '';
       const cellStr = String(cell).trim();
       if (/^-?\d*\.?\d+$/.test(cellStr)) {
@@ -307,7 +291,6 @@ export const generateSeparateSheetsExcelReport = (
           const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
           ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
 
-          // Auto-width columns based on header length
           if (preparedData[0]) {
             ws['!cols'] = preparedData[0].map((header: any) => ({
               wch: Math.max(String(header).length + 2, 12)
