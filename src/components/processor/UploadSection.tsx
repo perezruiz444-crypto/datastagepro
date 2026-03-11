@@ -61,13 +61,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
 
   const finalMonth = detectedMonth || manualMonth;
   const finalYear = detectedYear || manualYear;
-  const canContinue = selectedFile && finalMonth && finalYear;
+  const canContinue = selectedFile && finalMonth;
   const periodDetected = detectedMonth && detectedYear;
   const needsManualInput = selectedFile && !detecting && !periodDetected;
 
   const handleContinue = () => {
-    if (selectedFile && finalMonth && finalYear) {
-      onFileSelect(selectedFile, finalMonth, finalYear);
+    if (selectedFile && finalMonth) {
+      onFileSelect(selectedFile, finalMonth, finalYear || currentYear);
     }
   };
 
