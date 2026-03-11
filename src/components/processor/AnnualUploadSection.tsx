@@ -209,14 +209,11 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
         </div>
 
         <div className="border-t pt-6 text-center">
-          <Button size="lg" onClick={() => detectedYear && onProcess(detectedYear)} disabled={uploadedFilesCount === 0 || !detectedYear}>
+          <Button size="lg" onClick={() => onProcess()} disabled={uploadedFilesCount === 0}>
             Generar Reporte Anual ({uploadedFilesCount} {uploadedFilesCount === 1 ? 'mes' : 'meses'})
           </Button>
           {uploadedFilesCount === 0 && (
             <p className="text-sm text-muted-foreground mt-3">Cargue al menos un archivo para generar el reporte.</p>
-          )}
-          {uploadedFilesCount > 0 && !detectedYear && (
-            <p className="text-sm text-destructive mt-3">No se pudo detectar el año. Verifique los nombres de los archivos ZIP.</p>
           )}
         </div>
       </CardContent>
