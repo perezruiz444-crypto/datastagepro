@@ -10,7 +10,7 @@ import { detectPeriodFromZipFile } from '@/services/fileService';
 interface AnnualUploadSectionProps {
   files: Record<string, File | null>;
   onFilesChange: (files: Record<string, File | null>) => void;
-  onProcess: (detectedYear: number) => void;
+  onProcess: () => void;
 }
 
 const guessMonth = (fileName: string): string | null => {
