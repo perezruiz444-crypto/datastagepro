@@ -58,7 +58,7 @@ const buildPrefix = (patente: string, pedCrudo: string, seccion: string, fecha: 
   const { mes, anio } = extractMesAnioFromFecha(fecha);
   const yy = extractYearFromDateField(fecha);
   const pedUnificado = buildPedimentoUnificado(patente, pedCrudo, seccion, yy);
-  return [mes, anio, patente, pedCrudo, seccion, pedUnificado];
+  return [pedUnificado, mes, anio, patente, pedCrudo, seccion];
 };
 
 // ===========================
