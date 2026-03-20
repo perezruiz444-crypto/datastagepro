@@ -75,10 +75,10 @@ export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', 
 export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
 
 /** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
-const STD_PREFIX = ['Mes', 'Anio', 'Patente', 'Pedimento', 'SeccionAduanera', 'PedimentoUnificado'];
+const STD_PREFIX = ['PedimentoUnificado', 'Mes', 'Año', 'Patente', 'Pedimento', 'SeccionAduanera'];
 
 /** Índice de la columna PedimentoUnificado en las tablas enriquecidas */
-export const PEDIMENTO_UNIFICADO_INDEX = 5;
+export const PEDIMENTO_UNIFICADO_INDEX = 0;
 
 /**
  * Encabezados por archivo. Nombres estilo DB (CamelCase).
