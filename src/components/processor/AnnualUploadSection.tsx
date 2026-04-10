@@ -213,10 +213,10 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
 
         <div className="border-t pt-6 text-center">
           <Button size="lg" onClick={() => onProcess()} disabled={uploadedFilesCount === 0}>
-            Generar Reporte Anual ({uploadedFilesCount} {uploadedFilesCount === 1 ? 'mes' : 'meses'})
+            Generar Consolidado ({uploadedFilesCount} periodos)
           </Button>
           {uploadedFilesCount === 0 && (
-            <p className="text-sm text-muted-foreground mt-3">Cargue al menos un archivo para generar el reporte.</p>
+            <p className="text-sm text-muted-foreground mt-3">Cargue al menos un archivo para iniciar la consolidación.</p>
           )}
         </div>
       </CardContent>
