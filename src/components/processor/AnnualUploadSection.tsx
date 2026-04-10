@@ -181,24 +181,27 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
           </Alert>
         )}
 
-        {/* Validation alerts */}
+       {/* Validation alerts */}
         {uploadedFilesCount > 0 && (
           allComplete ? (
             <Alert className="border-green-500/50 bg-green-500/5">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-700 dark:text-green-400">Reporte completo</AlertTitle>
+              <AlertTitle className="text-green-700 dark:text-green-400">Ejercicio fiscal completo detectado</AlertTitle>
               <AlertDescription className="text-green-600 dark:text-green-500">
-                Los 12 meses están cargados correctamente.
+                Los 12 periodos están listos para procesamiento.
               </AlertDescription>
             </Alert>
           ) : (
-            <Alert className="border-yellow-500/50 bg-yellow-500/5">
-              <AlertTriangle className="h-4 w-4 text-yellow-600" />
-              <AlertTitle className="text-yellow-700 dark:text-yellow-400">Faltan {missingMonths.length} {missingMonths.length === 1 ? 'mes' : 'meses'}</AlertTitle>
-              <AlertDescription className="text-yellow-600 dark:text-yellow-500">
-                Faltan: {missingMonths.join(', ')}
+            <Alert className="border-secondary/50 bg-secondary/5">
+              <AlertTitle className="text-secondary-foreground font-medium flex items-center gap-2">
+                <FileArchive className="h-4 w-4" /> Consolidación Parcial
+              </AlertTitle>
+              <AlertDescription className="text-secondary-foreground/80">
+                {uploadedFilesCount} periodos listos para procesar. Faltan: {missingMonths.join(', ')}
               </AlertDescription>
             </Alert>
+          )
+        )}
           )
         )}
 
