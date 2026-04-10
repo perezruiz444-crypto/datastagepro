@@ -162,8 +162,8 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
           ) : (
             <>
               <FileArchive className="h-12 w-12 text-primary mx-auto mb-4" />
-              <p className="text-lg font-medium text-foreground">Arrastre los 12 archivos ZIP aquí</p>
-              <p className="text-muted-foreground">o haga click para seleccionar múltiples archivos</p>
+              <p className="text-lg font-medium text-foreground">Arrastre los archivos .zip aquí</p>
+              <p className="text-muted-foreground">o seleccione los periodos a consolidar</p>
             </>
           )}
           <input type="file" ref={bulkInputRef} accept=".zip" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
