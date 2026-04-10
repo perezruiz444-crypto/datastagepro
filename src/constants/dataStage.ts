@@ -75,16 +75,20 @@ export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', 
 export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
 
 /** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
-const STD_PREFIX = ['PedimentoUnificado', 'Mes', 'Año', 'Patente', 'Pedimento', 'SeccionAduanera'];
+const STD_PREFIX = ['PedimentoUnificado', 'Año', 'Patente', 'Pedimento', 'SeccionAduanera'];
 
-/** Índice de la columna PedimentoUnificado en las tablas enriquecidas */
-export const PEDIMENTO_UNIFICADO_INDEX = 0;
+// ...resto del archivo...
 
 /**
- * Encabezados por archivo. Nombres estilo DB (CamelCase).
- * Las primeras 6 columnas son siempre: Mes, Anio, Patente, Pedimento(crudo), SeccionAduanera, PedimentoUnificado.
- * Los valores son CRUDOS (sin traducciones de catálogos).
+ * Genera encabezados genéricos para archivos sin definición oficial.
  */
+export const generateFallbackHeaders = (columnCount: number, _fileKey: string): string[] => {
+  const headers = ['Anio', 'Patente', 'Pedimento', 'SeccionAduanera', 'PedimentoUnificado'];
+  for (let i = headers.length; i < columnCount; i++) {
+    headers.push(`Campo${i - 4}`);
+  }
+  return headers;
+};
 export const COLUMN_HEADERS: Record<string, string[]> = {
   '501': [
     ...STD_PREFIX,
