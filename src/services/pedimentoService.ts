@@ -51,14 +51,14 @@ export const buildPedimentoUnificado = (
 };
 
 /**
- * Construye las 6 columnas prefijo estándar:
- * [Mes, Anio, Patente, Pedimento(crudo), SeccionAduanera, PedimentoUnificado]
+ * Construye las 5 columnas prefijo estándar:
+ * [PedimentoUnificado, Anio, Patente, Pedimento(crudo), SeccionAduanera]
  */
 const buildPrefix = (patente: string, pedCrudo: string, seccion: string, fecha: string): string[] => {
-  const { mes, anio } = extractMesAnioFromFecha(fecha);
+  const { anio } = extractMesAnioFromFecha(fecha);
   const yy = extractYearFromDateField(fecha);
   const pedUnificado = buildPedimentoUnificado(patente, pedCrudo, seccion, yy);
-  return [pedUnificado, mes, anio, patente, pedCrudo, seccion];
+  return [pedUnificado, anio, patente, pedCrudo, seccion];
 };
 
 // ===========================
