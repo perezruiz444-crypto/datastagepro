@@ -135,14 +135,14 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-3">
-          Carga de Archivos para Reporte Anual
+          Consolidación Anual y Parcial de Data Stage
           {detectedYear && (
             <Badge variant="secondary" className="text-sm flex items-center gap-1">
               <Sparkles className="h-3 w-3" /> Año detectado: {detectedYear}
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>Suba todos los archivos ZIP del año. El sistema identificará el mes y año automáticamente.</CardDescription>
+        <CardDescription>Cargue los archivos .zip de los periodos a consolidar. Puede procesar el ejercicio fiscal completo o periodos parciales (1 a 11 meses); el motor unificará la estructura de los datos disponibles.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div
