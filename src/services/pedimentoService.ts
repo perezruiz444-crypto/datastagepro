@@ -141,7 +141,7 @@ const transform502Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(8);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-const ctx = lookup501.get(prefix[0]) || emptyCtx;
+const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -153,7 +153,7 @@ const transform503Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(5);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -165,7 +165,7 @@ const transform504Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(5);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -177,7 +177,7 @@ const transform505Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(18);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, ctx.fechaRecepcion, fechaPago,
@@ -192,7 +192,7 @@ const transform506Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(5);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -204,7 +204,7 @@ const transform507Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -216,7 +216,7 @@ const transform508Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(13);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -228,7 +228,7 @@ const transform509Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -240,7 +240,7 @@ const transform510Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -252,7 +252,7 @@ const transform511Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(6);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -264,7 +264,7 @@ const transform512Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(12);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
 
   // Pedimento Original Unificado
   const fechaOpOrig = get(7);
@@ -282,7 +282,7 @@ const transform520Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(11);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -295,7 +295,7 @@ const transform551Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(29);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
 
   // Precio Unitario USD = ValorDolares (idx10) / CantidadUMComercial (idx11)
   const valorDolares = parseFloat(get(10)) || 0;
@@ -321,7 +321,7 @@ const transform552Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -333,7 +333,7 @@ const transform553Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(10);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -346,7 +346,7 @@ const transform554Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(8);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -359,7 +359,7 @@ const transform555Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(14);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -374,7 +374,7 @@ const transform556Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(8);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-const ctx = lookup501.get(prefix[0]) || emptyCtx;
+const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -387,7 +387,7 @@ const transform557Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(8);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-  const ctx = lookup501.get(prefix[0]) || emptyCtx;
+  const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, ctx.tipoPedimento, fechaPago,
@@ -400,7 +400,7 @@ const transform558Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPago = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPago);
-const ctx = lookup501.get(prefix[0]) || emptyCtx;
+const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   const observaciones = 6 < row.length ? row[6] : '';
   return [
     ...prefix,
@@ -414,7 +414,7 @@ const transform701Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPagoReal = get(13);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPagoReal);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   const fechaOpAnterior = get(9);
   let pedAnterior = '';
   if (fechaOpAnterior) {
@@ -435,7 +435,7 @@ const transform702Row = (row: string[], lookup501: Map<string, Context501>): str
   const get = (idx: number): string => (idx < row.length ? row[idx].trim() : '');
   const fechaPagoReal = get(7);
   const prefix = buildPrefix(get(0), get(1), get(2), fechaPagoReal);
- const ctx = lookup501.get(prefix[0]) || emptyCtx;
+ const ctx = lookup501.get(prefix[PEDIMENTO_UNIFICADO_INDEX]) || emptyCtx;
   return [
     ...prefix,
     ctx.tipoOperacion, ctx.clave, get(6), fechaPagoReal,
