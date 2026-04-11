@@ -78,22 +78,8 @@ export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '5
 export const PEDIMENTO_UNIFICADO_INDEX = 5;
 
 /** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
-// ... (Asegúrate de que tu arreglo STD_PREFIX coincida con esta estructura si el índice es 5)
-/** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
-const STD_PREFIX = ['PedimentoUnificado', 'Año', 'Patente', 'Pedimento', 'SeccionAduanera'];
+const STD_PREFIX = ['Mes', 'Anio', 'Patente', 'Pedimento', 'SeccionAduanera', 'PedimentoUnificado'];
 
-// ...resto del archivo...
-
-/**
- * Genera encabezados genéricos para archivos sin definición oficial.
- */
-export const generateFallbackHeaders = (columnCount: number, _fileKey: string): string[] => {
-  const headers = ['Anio', 'Patente', 'Pedimento', 'SeccionAduanera', 'PedimentoUnificado'];
-  for (let i = headers.length; i < columnCount; i++) {
-    headers.push(`Campo${i - 4}`);
-  }
-  return headers;
-};
 export const COLUMN_HEADERS: Record<string, string[]> = {
   '501': [
     ...STD_PREFIX,
