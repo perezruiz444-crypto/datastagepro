@@ -595,7 +595,7 @@ export const enrichWithPedimentoUnificado = (
     // === FALLBACK: archivos sin transformador dedicado ===
     onLog(`ℹ️ ${fileKey}: Usando transformación genérica (sin mapeo específico)`);
     const sampleRow = dataRows[0] || [];
-    const totalCols = 5 + Math.max(sampleRow.length - 3, 0);
+    const totalCols = 6 + Math.max(sampleRow.length - 3, 0);
     const headers = COLUMN_HEADERS[fileKey] || generateFallbackHeaders(totalCols, fileKey);
     const enrichedRows: string[][] = [headers];
 
