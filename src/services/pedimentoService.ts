@@ -55,10 +55,10 @@ export const buildPedimentoUnificado = (
  * [PedimentoUnificado, Anio, Patente, Pedimento(crudo), SeccionAduanera]
  */
 const buildPrefix = (patente: string, pedCrudo: string, seccion: string, fecha: string): string[] => {
-  const { anio } = extractMesAnioFromFecha(fecha);
+  const { mes, anio } = extractMesAnioFromFecha(fecha);
   const yy = extractYearFromDateField(fecha);
   const pedUnificado = buildPedimentoUnificado(patente, pedCrudo, seccion, yy);
-  return [pedUnificado, anio, patente, pedCrudo, seccion];
+  return [mes, anio, patente, pedCrudo, seccion, pedUnificado];
 };
 
 // ===========================
