@@ -256,8 +256,8 @@ const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
   return data.map((row, rowIndex) => {
     if (rowIndex === 0) return row;
     return row.map((cell, colIndex) => {
-      // Proteger las 5 columnas llave (Anio, Patente, Pedimento, SeccionAduanera, PedimentoUnificado)
-      if (colIndex <= 4) return cell;
+      // Proteger las 6 columnas llave (Mes, Anio, Patente, Pedimento, SeccionAduanera, PedimentoUnificado)
+      if (colIndex <= 5) return cell;
       if (cell === '' || cell === null || cell === undefined) return '';
       const cellStr = String(cell).trim();
       if (/^-?\d*\.?\d+$/.test(cellStr)) {
