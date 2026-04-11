@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
 import { generateSeparateSheetsExcelReport, generateIndividualExcelFiles } from '@/services/fileService';
 import { FILE_NAMES, PEDIMENTO_REGEX } from '@/constants/dataStage';
+// Reemplaza la línea 8 con esto:
+import { FILE_NAMES, PEDIMENTO_REGEX, PEDIMENTO_UNIFICADO_INDEX } from '@/constants/dataStage';
 
 interface ResultsSectionProps {
   data: ProcessedData;
