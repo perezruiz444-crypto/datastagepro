@@ -48,7 +48,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
   if (data['501'] && data['501'].length > 1) {
     const pedSet = new Set<string>();
     for (let i = 1; i < data['501'].length; i++) {
-      const ped = data['501'][i][5];
+      const ped = data['501'][i][PEDIMENTO_UNIFICADO_INDEX]; // Cambiado de 5 a la constante (0)
       if (ped && PEDIMENTO_REGEX.test(ped)) pedSet.add(ped);
     }
     uniquePedimentos = pedSet.size;
