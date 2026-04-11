@@ -82,10 +82,10 @@ const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501>
     const row = enriched501[i];
     if (row[pidx]) {
       map.set(row[pidx], {
-        tipoOperacion: row[6] || '',
-        clave: row[7] || '',
-        tipoPedimento: row[8] || '',
-        fechaRecepcion: row[9] || '',
+        tipoOperacion: row[5] || '',  // Cambiado de 6 a 5
+        clave: row[6] || '',          // Cambiado de 7 a 6
+        tipoPedimento: row[7] || '',  // Cambiado de 8 a 7
+        fechaRecepcion: row[8] || '', // Cambiado de 9 a 8
       });
     }
   }
