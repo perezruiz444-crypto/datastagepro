@@ -77,15 +77,15 @@ const emptyCtx: Context501 = { tipoOperacion: '', clave: '', tipoPedimento: '', 
 /** Construye lookup de contexto desde la tabla 501 enriquecida. */
 const buildContext501Lookup = (enriched501: string[][]): Map<string, Context501> => {
   const map = new Map<string, Context501>();
-  const pidx = PEDIMENTO_UNIFICADO_INDEX;
+  const pidx = PEDIMENTO_UNIFICADO_INDEX; // Índice 5
   for (let i = 1; i < enriched501.length; i++) {
     const row = enriched501[i];
     if (row[pidx]) {
       map.set(row[pidx], {
-        tipoOperacion: row[5] || '',  // Cambiado de 6 a 5
-        clave: row[6] || '',          // Cambiado de 7 a 6
-        tipoPedimento: row[7] || '',  // Cambiado de 8 a 7
-        fechaRecepcion: row[8] || '', // Cambiado de 9 a 8
+        tipoOperacion: row[6] || '',  // Columna 7
+        clave: row[7] || '',          // Columna 8
+        tipoPedimento: row[8] || '',  // Columna 9
+        fechaRecepcion: row[9] || '', // Columna 10
       });
     }
   }
