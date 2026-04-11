@@ -74,6 +74,11 @@ export const PEDIMENTO_LEVEL_FILES = ['501', '502', '503', '504', '505', '506', 
 // Archivos a nivel partida
 export const PARTIDA_LEVEL_FILES = ['551', '552', '553', '554', '555', '556', '557', '558'];
 
+/** Índice de la columna PedimentoUnificado (Índice 5 = 6ta columna) */
+export const PEDIMENTO_UNIFICADO_INDEX = 5;
+
+/** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
+// ... (Asegúrate de que tu arreglo STD_PREFIX coincida con esta estructura si el índice es 5)
 /** Columnas prefijo estándar para todas las tablas (excepto Resumen) */
 const STD_PREFIX = ['PedimentoUnificado', 'Año', 'Patente', 'Pedimento', 'SeccionAduanera'];
 
