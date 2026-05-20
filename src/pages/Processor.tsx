@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppState, ReportMode, ProgressState, ProcessedData } from '@/types/dataStage';
 import { MONTH_NAMES } from '@/constants/dataStage';
-import { processZipFile, consolidateAnnualData, processHistoricalData } from '@/services/fileService';
+import { processZipFile, consolidateAnnualData, processHistoricalData, mergeExcelAndZips } from '@/services/fileService';
 import { UploadSection } from '@/components/processor/UploadSection';
 import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
 import { AnnualUploadSection } from '@/components/processor/AnnualUploadSection';
 
 import { HistoricalUploadSection } from '@/components/processor/HistoricalUploadSection';
+import { MultiYearUploadSection } from '@/components/processor/MultiYearUploadSection';
 import ThemeToggle from '@/components/landing/ThemeToggle';
 
 const Processor = () => {
@@ -118,6 +119,27 @@ const Processor = () => {
     }
   };
 
+  // Multi-year merge (Excel previos + ZIPs nuevos con dedup)
+  const handleMultiYearProcess = async (excelFiles: File[], zipFiles: File[]) => {
+    setAppState(AppState.PROCESSING);
+    cancellationSignal.current = { current: false };
+    try {
+      const { data, stats } = await mergeExcelAndZips(
+        excelFiles, zipFiles, addLog, setProgress, cancellationSignal.current,
+      );
+      setReportTitle(`Multi-Año (${stats.excels} xlsx + ${stats.zips} zip)`);
+      setProcessedData(data);
+      setAppState(AppState.RESULTS);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Error desconocido';
+      if (!msg.includes('cancelled')) {
+        setErrorMessage(msg);
+        setAppState(AppState.ERROR);
+        addLog(`❌ Error: ${msg}`);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <ThemeToggle />
@@ -147,13 +169,17 @@ const Processor = () => {
               onValueChange={(v) => setReportMode(v as ReportMode)}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value={ReportMode.MONTHLY}>Mensual</TabsTrigger>
                 <TabsTrigger value={ReportMode.ANNUAL}>Anual</TabsTrigger>
                 <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
+                <TabsTrigger value={ReportMode.MULTI_YEAR}>Multi-Año</TabsTrigger>
               </TabsList>
               <TabsContent value={ReportMode.HISTORICAL}>
                 <HistoricalUploadSection onProcess={handleHistoricalProcess} />
+              </TabsContent>
+              <TabsContent value={ReportMode.MULTI_YEAR}>
+                <MultiYearUploadSection onProcess={handleMultiYearProcess} />
               </TabsContent>
             </Tabs>
           </div>

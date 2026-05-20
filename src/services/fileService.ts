@@ -14,6 +14,61 @@ const isValidAscEntry = (name: string): boolean => {
   return true;
 };
 
+/** Encoding adaptativo: UTF-8 estricto primero, ISO-8859-1 como fallback. */
+const decodeBytes = (bytes: Uint8Array): string => {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('iso-8859-1').decode(bytes);
+  }
+};
+
+/** Junta fracciones partidas en 551/552 (ej. "12345678" + "99" → "1234567899"). */
+const applyGlobalFractionRule = (fileNumber: string, parts: string[]): string[] => {
+  if (fileNumber !== '551' && fileNumber !== '552') return parts;
+  const result = [...parts];
+  let fraccionIdx = -1;
+  const commonIndices = [4, 5, 6, 7, 8, 9];
+  for (const idx of commonIndices) {
+    if (result[idx] && /^\d{8}$/.test(result[idx])) {
+      fraccionIdx = idx;
+      break;
+    }
+  }
+  if (fraccionIdx === -1) {
+    fraccionIdx = result.findIndex(p => /^\d{8}$/.test(p));
+  }
+  if (fraccionIdx !== -1) {
+    if (result[fraccionIdx + 1] && /^\d{2}$/.test(result[fraccionIdx + 1])) {
+      result[fraccionIdx] = result[fraccionIdx] + result[fraccionIdx + 1];
+      result[fraccionIdx + 1] = '';
+    } else {
+      for (let k = result.length - 1; k > fraccionIdx; k--) {
+        if (/^\d{2}$/.test(result[k])) {
+          result[fraccionIdx] = result[fraccionIdx] + result[k];
+          result[k] = '';
+          break;
+        }
+      }
+    }
+  }
+  return result;
+};
+
+/** Fuerza formato texto '@' a celdas con dígitos puros o ceros a la izquierda
+ *  (fracciones, patentes, identificadores). Evita que Excel ampute ceros. */
+const applyTextFormatToSheet = (ws: any) => {
+  Object.keys(ws).forEach(key => {
+    if (key.startsWith('!')) return;
+    const cell = ws[key];
+    if (cell && cell.t === 's' && typeof cell.v === 'string') {
+      if (/^\d+$/.test(cell.v) || cell.v.startsWith('0')) {
+        cell.z = '@';
+      }
+    }
+  });
+};
+
 export const detectPeriodFromZipFile = async (file: File): Promise<{ month: string | null; year: number | null }> => {
   try {
     const zip = await JSZip.loadAsync(file);
@@ -86,6 +141,19 @@ export const processZipFile = async (
 ): Promise<ProcessedData> => {
   onLog('Iniciando análisis del archivo ZIP...');
   const zip = await JSZip.loadAsync(file);
+
+  const innerZips = Object.keys(zip.files).filter(
+    name => !zip.files[name].dir
+      && name.toLowerCase().endsWith('.zip')
+      && !name.includes('__MACOSX/'),
+  );
+  if (innerZips.length > 0) {
+    throw new Error(
+      `Este ZIP contiene ${innerZips.length} ZIP(s) internos (${innerZips.slice(0, 3).map(n => n.split('/').pop()).join(', ')}${innerZips.length > 3 ? '...' : ''}). ` +
+      `Extraiga los archivos ZIP internos y súbalos directamente.`,
+    );
+  }
+
   const files = Object.keys(zip.files).filter(name => !zip.files[name].dir && isValidAscEntry(name));
 
   onLog(`Archivos .asc encontrados en el ZIP (${files.length}): ${files.join(', ')}`);
@@ -114,8 +182,7 @@ export const processZipFile = async (
       onLog(`[${i + 1}/${totalFiles}] Procesando ${fileName}...`);
 
       const contentAsUint8Array = await zip.file(fileName)!.async('uint8array');
-      const decoder = new TextDecoder('iso-8859-1');
-      const content = decoder.decode(contentAsUint8Array);
+      const content = decodeBytes(contentAsUint8Array);
 
       if (!content) {
         onLog(`Advertencia: ${fileName} está vacío - Saltando...`);
@@ -130,10 +197,14 @@ export const processZipFile = async (
       }
       onProgress({ total: Math.round((i / totalFiles) * 100), file: 50, fileName });
 
-      processedData[fileNumber] = lines.map(line => {
-        const lineParts = line.split('|');
-        return lineParts.map(field => field.trim());
+      const rawRows = lines.map(line => line.split('|').map(field => field.trim().replace(/\r/g, '')));
+      const maxCols = rawRows.reduce((m, r) => Math.max(m, r.length), 0);
+      const uniformRows = rawRows.map(r => {
+        while (r.length < maxCols) r.push('');
+        return applyGlobalFractionRule(fileNumber, r);
       });
+
+      processedData[fileNumber] = uniformRows;
 
       onLog(`✅ ${fileName} procesado correctamente con ${lines.length} registros.`);
       onProgress({ total: Math.round(((i + 1) / totalFiles) * 100), file: 100, fileName });
@@ -279,6 +350,152 @@ export const processHistoricalData = async (
   return { data: consolidated, yearRange };
 };
 
+// ===========================
+// MERGE: Excel(s) previos + ZIP(s) nuevos con dedup por Pedimento_Unificado
+// ===========================
+
+/** Normaliza un nombre de hoja del Excel a la clave canónica (501, 551, Inci, etc.) */
+const normalizeSheetNameToFileKey = (sheetName: string): string => {
+  const cleaned = sheetName.trim();
+  const numMatch = cleaned.match(/^(\d{3})/);
+  if (numMatch) return numMatch[1];
+  const tokens = ['Inci', 'Sel', 'Resumen'];
+  for (const t of tokens) {
+    if (cleaned.toLowerCase().includes(t.toLowerCase())) return t;
+  }
+  return cleaned.split(/[\s_-]/)[0];
+};
+
+/** Detecta el índice de la columna Pedimento_Unificado / PedimentoUnificado en un header.
+ *  Devuelve -1 si la hoja viene en formato Gemini (sin esa columna). */
+const findPedimentoUnificadoCol = (header: string[]): number => {
+  return header.findIndex(h => {
+    const norm = String(h ?? '').toLowerCase().replace(/[_\s-]/g, '');
+    return norm === 'pedimentounificado';
+  });
+};
+
+/** Lee un .xlsx y lo convierte a ProcessedData. Autodetecta formato Lovable/Gemini. */
+const readExcelToProcessedData = async (
+  file: File,
+  onLog: (msg: string) => void,
+): Promise<{ data: ProcessedData; format: 'lovable' | 'gemini' | 'unknown' }> => {
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const result: ProcessedData = {};
+  let detectedFormat: 'lovable' | 'gemini' | 'unknown' = 'unknown';
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false })
+      .map((r: any[]) => r.map(c => (c == null ? '' : String(c).trim())));
+    if (rows.length === 0) continue;
+
+    const fileKey = normalizeSheetNameToFileKey(sheetName);
+    const puCol = findPedimentoUnificadoCol(rows[0]);
+    if (puCol >= 0 && detectedFormat === 'unknown') detectedFormat = 'lovable';
+    if (puCol < 0 && detectedFormat === 'unknown') detectedFormat = 'gemini';
+
+    if (!result[fileKey]) {
+      result[fileKey] = rows;
+    } else {
+      result[fileKey].push(...rows.slice(1));
+    }
+  }
+
+  onLog(`📂 ${file.name}: ${Object.keys(result).length} hojas, formato detectado: ${detectedFormat}`);
+  return { data: result, format: detectedFormat };
+};
+
+/**
+ * Merge avanzado: combina N Excel previos + N ZIPs nuevos en un solo ProcessedData.
+ * - Autodetecta formato Lovable (con Pedimento_Unificado) o Gemini (sin él).
+ * - Si todas las fuentes tienen Pedimento_Unificado: dedup por esa columna.
+ * - Si alguna fuente es formato Gemini: apila sin dedup y advierte.
+ * - Los ZIPs nuevos siempre se enriquecen vía processZipFile (genera Pedimento_Unificado).
+ */
+export const mergeExcelAndZips = async (
+  excelFiles: File[],
+  zipFiles: File[],
+  onLog: (msg: string) => void,
+  onProgress: (prog: ProgressState) => void,
+  cancellationSignal: { current: boolean },
+): Promise<{ data: ProcessedData; stats: { excels: number; zips: number; duplicatesRemoved: number; rowsAdded: number } }> => {
+  const totalSteps = excelFiles.length + zipFiles.length;
+  let step = 0;
+  const stats = { excels: excelFiles.length, zips: zipFiles.length, duplicatesRemoved: 0, rowsAdded: 0 };
+
+  if (totalSteps === 0) {
+    throw new Error('Debes subir al menos un Excel previo o un ZIP nuevo.');
+  }
+
+  const sources: { name: string; data: ProcessedData; format: 'lovable' | 'gemini' | 'unknown' }[] = [];
+
+  // 1) Leer todos los Excels previos
+  for (const file of excelFiles) {
+    if (cancellationSignal.current) throw new Error('Operation cancelled by user.');
+    onLog(`📥 Leyendo Excel previo: ${file.name}`);
+    onProgress({ total: Math.round((step / totalSteps) * 100), file: 0, fileName: file.name });
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      throw new Error(`${file.name}: solo se aceptan archivos .xlsx`);
+    }
+    const { data, format } = await readExcelToProcessedData(file, onLog);
+    sources.push({ name: file.name, data, format });
+    step++;
+    onProgress({ total: Math.round((step / totalSteps) * 100), file: 100, fileName: file.name });
+  }
+
+  // 2) Procesar todos los ZIPs nuevos (siempre formato Lovable porque pasan por enrichment)
+  for (const file of zipFiles) {
+    if (cancellationSignal.current) throw new Error('Operation cancelled by user.');
+    onLog(`📦 Procesando ZIP nuevo: ${file.name}`);
+    const data = await processZipFile(file, onLog, onProgress, cancellationSignal);
+    sources.push({ name: file.name, data, format: 'lovable' });
+    step++;
+  }
+
+  // 3) Determinar si podemos deduplicar (todas las fuentes deben tener Pedimento_Unificado)
+  const allLovable = sources.every(s => s.format === 'lovable');
+  if (!allLovable) {
+    onLog(`⚠️ No todas las fuentes tienen Pedimento_Unificado. Apilando sin deduplicar.`);
+  } else {
+    onLog(`🔑 Todas las fuentes tienen Pedimento_Unificado. Dedup activo.`);
+  }
+
+  // 4) Consolidar
+  const merged: ProcessedData = {};
+  const seenByKey: Record<string, Set<string>> = {};
+
+  for (const src of sources) {
+    for (const [fileKey, rows] of Object.entries(src.data)) {
+      if (rows.length === 0) continue;
+      if (!merged[fileKey]) {
+        merged[fileKey] = [rows[0]];
+        seenByKey[fileKey] = new Set();
+      }
+      const header = merged[fileKey][0];
+      const puCol = allLovable ? findPedimentoUnificadoCol(header) : -1;
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (puCol >= 0) {
+          const ped = (row[puCol] ?? '').trim();
+          if (ped && seenByKey[fileKey].has(ped)) {
+            stats.duplicatesRemoved++;
+            continue;
+          }
+          if (ped) seenByKey[fileKey].add(ped);
+        }
+        merged[fileKey].push(row);
+        stats.rowsAdded++;
+      }
+    }
+  }
+
+  onLog(`✅ Merge completo: ${stats.excels} Excel(s) + ${stats.zips} ZIP(s), ${stats.rowsAdded} filas nuevas, ${stats.duplicatesRemoved} duplicados omitidos.`);
+  return { data: merged, stats };
+};
+
 const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
   if (format === ExportFormat.TEXT) return data;
 
@@ -322,6 +539,10 @@ export const generateSeparateSheetsExcelReport = (
         const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
         const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+        if (format === ExportFormat.TEXT) {
+          applyTextFormatToSheet(ws);
+        }
 
         if (headerRow.length > 0) {
           const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
@@ -378,6 +599,10 @@ export const generateIndividualExcelFiles = async (
         const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
         const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+        if (format === ExportFormat.TEXT) {
+          applyTextFormatToSheet(ws);
+        }
 
         if (headerRow.length > 0) {
           const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
