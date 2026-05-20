@@ -1,14 +1,19 @@
+# Plan: Restaurar contenido de las pestañas Mensual y Anual
 
+## Problema
 
-## Plan: Eliminar módulo "Consolidado por Tabla"
+En `src/pages/Processor.tsx`, el `TabsList` declara 4 pestañas (Mensual, Anual, Histórico, Multi-Año), pero solo existen `TabsContent` para Histórico y Multi-Año. Al seleccionar Mensual o Anual no se renderiza nada — la UI aparece vacía.
 
-### Cambios
+## Cambios
 
-1. **`src/types/dataStage.ts`** — Eliminar `CONSOLIDATED_TABLE` del enum `ReportMode`
+### `src/pages/Processor.tsx`
+Agregar los `TabsContent` faltantes dentro del `<Tabs>`:
 
-2. **`src/pages/Processor.tsx`** — Eliminar import de `ConsolidatedTableUploadSection`, eliminar función `handleConsolidatedTableProcess`, cambiar grid de tabs de 4 a 3 columnas, eliminar tab trigger y content del consolidado
+- `TabsContent` para `ReportMode.MONTHLY` → renderiza `<UploadSection onFileSelect={handleMonthlyFileSelect} />`
+- `TabsContent` para `ReportMode.ANNUAL` → renderiza `<AnnualUploadSection annualFiles={annualFiles} setAnnualFiles={setAnnualFiles} onProcess={handleAnnualProcess} />`
 
-3. **`src/components/processor/ResultsSection.tsx`** — Simplificar `hasHeaders` a siempre `true`, eliminar condicional `reportMode !== ReportMode.CONSOLIDATED_TABLE` del botón ZIP
+Mantener intactos los contenidos existentes de Histórico y Multi-Año.
 
-4. **Eliminar archivo** `src/components/processor/ConsolidatedTableUploadSection.tsx`
+## Verificación
 
+Revisar las firmas reales de `UploadSection` y `AnnualUploadSection` antes de implementar, para pasar los props correctos.
