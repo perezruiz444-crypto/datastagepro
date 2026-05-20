@@ -6,6 +6,15 @@ import { extractYearFromDateField } from '@/constants/catalogs';
 // HELPERS
 // ===========================
 
+/** Año del Resumen.asc del zip actual (2 dígitos). Fallback cuando la fecha per-row falla. */
+let _fallbackYear: string | undefined;
+
+/** Tokens que identifican una fila de encabezado original del .asc */
+const HEADER_TOKENS = new Set([
+  'patente', 'pedimento', 'seccionaduanera', 'seccion_aduanera',
+  'numpedimento', 'aduana',
+]);
+
 /** Extrae Mes (nombre) y Año (4 dígitos) de un string de fecha crudo por fila */
 const extractMesAnioFromFecha = (fecha: string): { mes: string; anio: string } => {
   if (!fecha || !fecha.trim()) return { mes: '', anio: '' };
@@ -56,9 +65,11 @@ export const buildPedimentoUnificado = (
  */
 const buildPrefix = (patente: string, pedCrudo: string, seccion: string, fecha: string): string[] => {
   const { mes, anio } = extractMesAnioFromFecha(fecha);
-  const yy = extractYearFromDateField(fecha);
+  let yy = extractYearFromDateField(fecha);
+  if (yy === '00' && _fallbackYear) yy = _fallbackYear;
   const pedUnificado = buildPedimentoUnificado(patente, pedCrudo, seccion, yy);
-  return [mes, anio, patente, pedCrudo, seccion, pedUnificado];
+  const anioFinal = anio || (_fallbackYear ? `20${_fallbackYear}` : '');
+  return [mes, anioFinal, patente, pedCrudo, seccion, pedUnificado];
 };
 
 // ===========================
@@ -481,28 +492,37 @@ const processTable = (
   dataRows: string[][],
   transformer: (row: string[]) => string[],
   onLog: (msg: string) => void,
-  minFields: number = 3
+  minFields: number = 3,
+  ctxLookup?: Map<string, Context501>,
 ): string[][] => {
   const headers = COLUMN_HEADERS[fileKey];
   if (!headers) return [[`Error: No headers for ${fileKey}`]];
   const enrichedRows: string[][] = [headers];
   let validCount = 0;
   let invalidCount = 0;
+  let missingCtx = 0;
   for (const row of dataRows) {
     if (row.length < minFields) { invalidCount++; continue; }
     try {
-      enrichedRows.push(transformer(row));
+      const transformed = transformer(row);
+      if (ctxLookup && fileKey !== '501' && !ctxLookup.has(transformed[PEDIMENTO_UNIFICADO_INDEX])) {
+        missingCtx++;
+      }
+      enrichedRows.push(transformed);
       validCount++;
     } catch (e) { invalidCount++; }
   }
-  onLog(`✅ ${fileKey}: ${validCount} registros transformados (${invalidCount} inválidos)`);
+  const ctxNote = missingCtx ? `, ${missingCtx} sin ctx501` : '';
+  onLog(`✅ ${fileKey}: ${validCount} registros transformados (${invalidCount} inválidos${ctxNote})`);
   return enrichedRows;
 };
 
 /** Helper: detecta y salta fila de encabezado original si existe */
 const skipHeaderRow = (rows: string[][], onLog: (msg: string) => void, fileKey: string): string[][] => {
-  if (rows.length > 0 && rows[0].length >= 3 &&
-    (!/^\d+$/.test(rows[0][0].trim()) || !/^\d+$/.test(rows[0][1].trim()) || !/^\d+$/.test(rows[0][2].trim()))) {
+  if (rows.length === 0 || rows[0].length < 3) return rows;
+  const first3 = rows[0].slice(0, 3).map(c => c.trim().toLowerCase().replace(/[^a-z]/g, ''));
+  const looksLikeHeader = first3.some(c => HEADER_TOKENS.has(c));
+  if (looksLikeHeader) {
     onLog(`🔄 ${fileKey}: Encabezado original detectado y reemplazado`);
     return rows.slice(1);
   }
@@ -549,8 +569,12 @@ const noCtxTransformers: Record<string, (row: string[]) => string[]> = {
  */
 export const enrichWithPedimentoUnificado = (
   data: ProcessedData,
-  onLog: (message: string) => void
+  onLog: (message: string) => void,
+  fallbackYear?: string,
 ): ProcessedData => {
+  _fallbackYear = fallbackYear;
+  if (fallbackYear) onLog(`📅 Año fallback (Resumen.asc): 20${fallbackYear}`);
+
   const enrichedData: ProcessedData = {};
 
   onLog(`📋 Extracción de Mes/Año: modo per-row desde fecha de pago de cada registro`);
@@ -563,6 +587,7 @@ export const enrichWithPedimentoUnificado = (
 
   // Build context lookup from enriched 501
   const context501 = enrichedData['501'] ? buildContext501Lookup(enrichedData['501']) : new Map<string, Context501>();
+  onLog(`🔗 Lookup 501 construido con ${context501.size} pedimentos únicos`);
 
   // === PHASE 2: Process all other tables ===
   for (const [fileKey, rows] of Object.entries(data)) {
@@ -577,7 +602,9 @@ export const enrichWithPedimentoUnificado = (
       enrichedData[fileKey] = processTable(
         fileKey, dataRows,
         (row) => ctxTransformers[fileKey](row, context501),
-        onLog
+        onLog,
+        3,
+        context501,
       );
       continue;
     }

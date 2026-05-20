@@ -6,10 +6,18 @@ import { enrichWithPedimentoUnificado, validateProcessedData } from '@/services/
 
 export { enrichWithPedimentoUnificado, validateProcessedData };
 
+const isValidAscEntry = (name: string): boolean => {
+  if (!name.toLowerCase().endsWith('.asc')) return false;
+  if (name.includes('__MACOSX/')) return false;
+  const basename = name.split('/').pop() ?? '';
+  if (basename.startsWith('._')) return false;
+  return true;
+};
+
 export const detectPeriodFromZipFile = async (file: File): Promise<{ month: string | null; year: number | null }> => {
   try {
     const zip = await JSZip.loadAsync(file);
-    const ascFiles = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.asc'));
+    const ascFiles = Object.keys(zip.files).filter(name => isValidAscEntry(name));
     if (ascFiles.length === 0) return { month: null, year: null };
 
     const file501 = ascFiles.find(name => name.includes('501'));
@@ -78,7 +86,7 @@ export const processZipFile = async (
 ): Promise<ProcessedData> => {
   onLog('Iniciando análisis del archivo ZIP...');
   const zip = await JSZip.loadAsync(file);
-  const files = Object.keys(zip.files).filter(name => !zip.files[name].dir && name.toLowerCase().endsWith('.asc'));
+  const files = Object.keys(zip.files).filter(name => !zip.files[name].dir && isValidAscEntry(name));
 
   onLog(`Archivos .asc encontrados en el ZIP (${files.length}): ${files.join(', ')}`);
 
@@ -145,8 +153,29 @@ export const processZipFile = async (
     onLog(`⚠️ ATENCIÓN: Faltan archivos críticos: ${missingCritical.map(id => `${id} (${FILE_NAMES[id] || 'N/A'})`).join(', ')}`);
   }
 
+  // Extraer año del Resumen.asc como fallback canónico (referencia: CLAUDE.md Data stage)
+  let yearFromResumen: string | undefined;
+  if (processedData['Resumen'] && processedData['Resumen'].length > 0) {
+    const resumenRow = processedData['Resumen'][1] ?? processedData['Resumen'][0];
+    for (const field of resumenRow) {
+      const trimmed = (field ?? '').trim();
+      const m = trimmed.match(/^(\d{4})/);
+      if (m) {
+        const yr = parseInt(m[1], 10);
+        if (yr >= 2000 && yr <= 2099) {
+          yearFromResumen = m[1].substring(2, 4);
+          break;
+        }
+      }
+    }
+    if (yearFromResumen) onLog(`📅 Año del Resumen.asc: 20${yearFromResumen}`);
+  }
+  if (!yearFromResumen && year) {
+    yearFromResumen = String(year).slice(-2);
+  }
+
   onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
-  const enrichedData = enrichWithPedimentoUnificado(processedData, onLog);
+  const enrichedData = enrichWithPedimentoUnificado(processedData, onLog, yearFromResumen);
   onLog('--- Validando integridad de datos ---');
   validateProcessedData(enrichedData, onLog);
   return enrichedData;
@@ -279,23 +308,27 @@ export const generateSeparateSheetsExcelReport = (
   format: ExportFormat = ExportFormat.TEXT
 ) => {
   try {
+    const exportWarnings = validateProcessedData(data, (msg) => console.log(`[export-validation] ${msg}`));
+    if (exportWarnings.length > 0) {
+      console.warn(`Excel export: ${exportWarnings.length} advertencias`, exportWarnings);
+    }
+
     const wb = XLSX.utils.book_new();
     const sectionsToExport = Object.keys(data);
 
     sectionsToExport.forEach(section => {
       if (data[section]) {
         const preparedData = prepareDataForExcel(data[section], format);
-        const ws = XLSX.utils.aoa_to_sheet(preparedData);
+        const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
+        const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-        if (preparedData.length > 0) {
-          const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-          ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
-
-          if (preparedData[0]) {
-            ws['!cols'] = preparedData[0].map((header: any) => ({
-              wch: Math.max(String(header).length + 2, 12)
-            }));
-          }
+        if (headerRow.length > 0) {
+          const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
+          ws['!autofilter'] = { ref: `A1:${lastCol}1` };
+          ws['!cols'] = headerRow.map((header: any) => ({
+            wch: Math.max(String(header).length + 2, 12)
+          }));
         }
 
         const rawName = CLEAN_FILE_NAMES[section] || section;
@@ -342,17 +375,16 @@ export const generateIndividualExcelFiles = async (
       if (data[section]) {
         const wb = XLSX.utils.book_new();
         const preparedData = prepareDataForExcel(data[section], format);
-        const ws = XLSX.utils.aoa_to_sheet(preparedData);
+        const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
+        const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-        if (preparedData.length > 0) {
-          const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-          ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
-
-          if (preparedData[0]) {
-            ws['!cols'] = preparedData[0].map((header: any) => ({
-              wch: Math.max(String(header).length + 2, 12)
-            }));
-          }
+        if (headerRow.length > 0) {
+          const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
+          ws['!autofilter'] = { ref: `A1:${lastCol}1` };
+          ws['!cols'] = headerRow.map((header: any) => ({
+            wch: Math.max(String(header).length + 2, 12)
+          }));
         }
 
         const rawName = CLEAN_FILE_NAMES[section] || section;
