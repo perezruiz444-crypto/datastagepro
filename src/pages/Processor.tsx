@@ -175,6 +175,16 @@ const Processor = () => {
                 <TabsTrigger value={ReportMode.HISTORICAL}>Histórico</TabsTrigger>
                 <TabsTrigger value={ReportMode.MULTI_YEAR}>Multi-Año</TabsTrigger>
               </TabsList>
+              <TabsContent value={ReportMode.MONTHLY}>
+                <UploadSection onFileSelect={handleMonthlyFileSelect} />
+              </TabsContent>
+              <TabsContent value={ReportMode.ANNUAL}>
+                <AnnualUploadSection
+                  files={annualFiles}
+                  onFilesChange={setAnnualFiles}
+                  onProcess={handleAnnualProcess}
+                />
+              </TabsContent>
               <TabsContent value={ReportMode.HISTORICAL}>
                 <HistoricalUploadSection onProcess={handleHistoricalProcess} />
               </TabsContent>
