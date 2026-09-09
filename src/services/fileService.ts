@@ -106,6 +106,16 @@ export const detectPeriodFromZipFile = async (file: File): Promise<{ month: stri
               yearCounts[yr] = (yearCounts[yr] || 0) + 1;
             }
           }
+          // YYYY-MM-DD, con o sin hora (ej. "2026-01-05 17:40:22") — formato real de FechaPago/FechaRecepcion
+          const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s|$)/);
+          if (isoMatch) {
+            const yr = parseInt(isoMatch[1], 10);
+            const mo = parseInt(isoMatch[2], 10);
+            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
+              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+            }
+          }
         });
       });
 
