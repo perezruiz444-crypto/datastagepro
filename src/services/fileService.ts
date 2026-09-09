@@ -69,6 +69,105 @@ const applyTextFormatToSheet = (ws: any) => {
   });
 };
 
+// ===========================
+// FECHAS: detección por contenido y conversión a fecha real de Excel
+// ===========================
+
+/** Convierte un string de fecha (varios formatos del dominio) a Date (sin hora), o null si no matchea. */
+export const parseDateOnly = (value: string): Date | null => {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+
+  // YYYYMMDD puro (8 dígitos)
+  if (/^\d{8}$/.test(trimmed)) {
+    const yyyy = parseInt(trimmed.substring(0, 4), 10);
+    const mm = parseInt(trimmed.substring(4, 6), 10);
+    const dd = parseInt(trimmed.substring(6, 8), 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
+    return null;
+  }
+
+  // YYYY-MM-DD, con o sin hora (ej. "2026-01-05 17:40:22")
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}:\d{2})?$/);
+  if (isoMatch) {
+    const yyyy = parseInt(isoMatch[1], 10);
+    const mm = parseInt(isoMatch[2], 10);
+    const dd = parseInt(isoMatch[3], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
+    return null;
+  }
+
+  // DD/MM/YYYY o DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const dd = parseInt(dmyMatch[1], 10);
+    const mm = parseInt(dmyMatch[2], 10);
+    const yyyy = parseInt(dmyMatch[3], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
+    return null;
+  }
+
+  return null;
+};
+
+/** Detecta qué columnas (por índice) son de fecha: ≥90% de valores no vacíos matchean un patrón de fecha.
+ *  Por contenido, no por nombre — así "TipoFecha" (código numérico) no se confunde con una fecha real. */
+export const detectDateColumns = (rows: string[][]): Set<number> => {
+  const dateCols = new Set<number>();
+  if (rows.length < 2) return dateCols;
+  const numCols = rows[0].length;
+
+  for (let col = 0; col < numCols; col++) {
+    let nonEmpty = 0;
+    let matches = 0;
+    for (let r = 1; r < rows.length; r++) {
+      const raw = (rows[r][col] ?? '').trim();
+      if (!raw) continue;
+      nonEmpty++;
+      if (parseDateOnly(raw) !== null) matches++;
+    }
+    if (nonEmpty > 0 && matches / nonEmpty >= 0.9) dateCols.add(col);
+  }
+  return dateCols;
+};
+
+/** Aplica fecha real de Excel (sin hora, formato dd/mm/yyyy) a las columnas detectadas como fecha. */
+const applyDateFormatToSheet = (ws: XLSX.WorkSheet, headerRow: string[], dateCols: Set<number>) => {
+  if (dateCols.size === 0) return;
+  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:A1');
+  for (let r = range.s.r + 1; r <= range.e.r; r++) {
+    for (const col of dateCols) {
+      const addr = XLSX.utils.encode_cell({ r, c: col });
+      const cell = ws[addr];
+      if (!cell || cell.t !== 's' || typeof cell.v !== 'string') continue;
+      const parsed = parseDateOnly(cell.v);
+      if (parsed) {
+        cell.t = 'd';
+        cell.v = parsed;
+        cell.z = 'dd/mm/yyyy';
+      }
+    }
+  }
+};
+
+/**
+ * Empaqueta uno o más archivos .asc sueltos en un .zip en memoria, para reutilizar
+ * el mismo pipeline (detección de periodo, processZipFile) sin duplicar lógica.
+ */
+export const buildZipFromAscFiles = async (files: File[]): Promise<File> => {
+  const zip = new JSZip();
+  for (const file of files) {
+    // JSZip acepta un File/Blob directamente como contenido (lo resuelve internamente),
+    // sin necesidad de convertirlo a ArrayBuffer manualmente.
+    zip.file(file.name, file);
+  }
+  const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+  const zipName = files.length === 1
+    ? `${files[0].name.replace(/\.asc$/i, '')}.zip`
+    : 'archivos_asc.zip';
+  return new File([zipBuffer], zipName, { type: 'application/zip' });
+};
+
 export const detectPeriodFromZipFile = async (file: File): Promise<{ month: string | null; year: number | null }> => {
   try {
     const zip = await JSZip.loadAsync(file);
@@ -554,6 +653,9 @@ export const generateSeparateSheetsExcelReport = (
           applyTextFormatToSheet(ws);
         }
 
+        const dateCols = detectDateColumns(data[section]);
+        applyDateFormatToSheet(ws, headerRow, dateCols);
+
         if (headerRow.length > 0) {
           const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
           ws['!autofilter'] = { ref: `A1:${lastCol}1` };
@@ -613,6 +715,9 @@ export const generateIndividualExcelFiles = async (
         if (format === ExportFormat.TEXT) {
           applyTextFormatToSheet(ws);
         }
+
+        const dateCols = detectDateColumns(data[section]);
+        applyDateFormatToSheet(ws, headerRow, dateCols);
 
         if (headerRow.length > 0) {
           const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
