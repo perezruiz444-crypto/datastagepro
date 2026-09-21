@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { detectPeriodFromZipFile } from '@/services/fileService';
+import { detectPeriodFromZipFile, buildZipFromAscFiles } from '@/services/fileService';
 import { MONTH_NAMES } from '@/constants/dataStage';
 
 interface UploadSectionProps {
@@ -15,9 +15,21 @@ interface UploadSectionProps {
 const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
+/** Valida una selección de archivos: un solo .zip, o uno/varios .asc. Devuelve un mensaje de error o null. */
+const validateSelection = (files: File[]): string | null => {
+  if (files.length === 0) return 'No se seleccionó ningún archivo.';
+  const allZip = files.every(f => f.name.toLowerCase().endsWith('.zip'));
+  const allAsc = files.every(f => f.name.toLowerCase().endsWith('.asc'));
+  if (allZip && files.length === 1) return null;
+  if (allZip && files.length > 1) return 'Seleccione un solo archivo ZIP a la vez.';
+  if (allAsc) return null;
+  return 'Seleccione un archivo ZIP (.zip), o uno o varios archivos .asc.';
+};
+
 export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [zipFile, setZipFile] = useState<File | null>(null); // .zip original, o el .zip virtual armado desde .asc
   const [detectedMonth, setDetectedMonth] = useState<string | null>(null);
   const [detectedYear, setDetectedYear] = useState<number | null>(null);
   const [manualMonth, setManualMonth] = useState<string | null>(null);
@@ -25,12 +37,15 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
   const [detecting, setDetecting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback(async (file: File | undefined) => {
-    if (!file || !file.name.toLowerCase().endsWith('.zip')) {
-      alert('Por favor, seleccione un archivo ZIP (.zip).');
+  const handleFiles = useCallback(async (fileList: File[]) => {
+    const error = validateSelection(fileList);
+    if (error) {
+      alert(error);
       return;
     }
-    setSelectedFile(file);
+
+    setSelectedFiles(fileList);
+    setZipFile(null);
     setDetectedMonth(null);
     setDetectedYear(null);
     setManualMonth(null);
@@ -38,7 +53,11 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
     setDetecting(true);
 
     try {
-      const { month, year } = await detectPeriodFromZipFile(file);
+      const isAsc = fileList[0].name.toLowerCase().endsWith('.asc');
+      const effectiveZip = isAsc ? await buildZipFromAscFiles(fileList) : fileList[0];
+      setZipFile(effectiveZip);
+
+      const { month, year } = await detectPeriodFromZipFile(effectiveZip);
       if (month) setDetectedMonth(month);
       if (year) setDetectedYear(year);
     } catch (e) {
@@ -54,25 +73,26 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files?.length > 0) {
-      handleFile(e.dataTransfer.files[0]);
+      handleFiles(Array.from(e.dataTransfer.files));
       e.dataTransfer.clearData();
     }
-  }, [handleFile]);
+  }, [handleFiles]);
 
   const finalMonth = detectedMonth || manualMonth;
   const finalYear = detectedYear || manualYear;
-  const canContinue = selectedFile && finalMonth;
+  const canContinue = zipFile && finalMonth;
   const periodDetected = detectedMonth && detectedYear;
-  const needsManualInput = selectedFile && !detecting && !periodDetected;
+  const needsManualInput = zipFile && !detecting && !periodDetected;
 
   const handleContinue = () => {
-    if (selectedFile && finalMonth) {
-      onFileSelect(selectedFile, finalMonth, finalYear || currentYear);
+    if (zipFile && finalMonth) {
+      onFileSelect(zipFile, finalMonth, finalYear || currentYear);
     }
   };
 
   const handleCancelSelection = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
+    setZipFile(null);
     setDetectedMonth(null);
     setDetectedYear(null);
     setManualMonth(null);
@@ -80,14 +100,18 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const displayName = selectedFiles.length === 1
+    ? selectedFiles[0].name
+    : `${selectedFiles.length} archivos .asc seleccionados`;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Carga de Archivo ZIP</CardTitle>
-        <CardDescription>Suba el archivo ZIP que contiene sus archivos de datos (.asc). El periodo se detectará automáticamente.</CardDescription>
+        <CardTitle>Carga de Archivos</CardTitle>
+        <CardDescription>Suba un archivo ZIP, o uno o varios archivos .asc sueltos. El periodo se detectará automáticamente.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {!selectedFile ? (
+        {selectedFiles.length === 0 ? (
           <>
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
@@ -99,19 +123,19 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) =>
               onClick={() => fileInputRef.current?.click()}
             >
               <FileArchive className="h-12 w-12 text-primary mx-auto mb-4" />
-              <p className="text-lg font-medium text-foreground">Arrastre y suelte su archivo ZIP aquí</p>
+              <p className="text-lg font-medium text-foreground">Arrastre y suelte su ZIP o sus archivos .asc aquí</p>
               <p className="text-muted-foreground my-2">o</p>
-              <Button variant="default">Seleccionar archivo</Button>
-              <input type="file" ref={fileInputRef} accept=".zip" className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <Button variant="default">Seleccionar archivo(s)</Button>
+              <input type="file" ref={fileInputRef} accept=".zip,.asc" multiple className="hidden"
+                onChange={(e) => e.target.files && e.target.files.length > 0 && handleFiles(Array.from(e.target.files))} />
             </div>
-            <p className="text-sm text-muted-foreground">El archivo debe contener archivos de datos con extensión .asc.</p>
+            <p className="text-sm text-muted-foreground">Acepta un archivo ZIP con los .asc adentro, o los .asc sueltos (puede seleccionar varios a la vez).</p>
           </>
         ) : (
           <div className="bg-primary/5 border-2 border-primary/30 rounded-xl p-6 text-center">
             <FileArchive className="h-12 w-12 text-primary mx-auto mb-4" />
-            <p className="text-lg font-medium text-foreground">Archivo listo para procesar:</p>
-            <p className="text-muted-foreground font-mono mb-3 break-all">{selectedFile.name}</p>
+            <p className="text-lg font-medium text-foreground">Archivo(s) listo(s) para procesar:</p>
+            <p className="text-muted-foreground font-mono mb-3 break-all">{displayName}</p>
 
             {detecting && (
               <p className="text-sm text-muted-foreground mb-4">Detectando periodo...</p>

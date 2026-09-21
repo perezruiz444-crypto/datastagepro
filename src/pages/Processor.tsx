@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppState, ReportMode, ProgressState, ProcessedData } from '@/types/dataStage';
 import { MONTH_NAMES } from '@/constants/dataStage';
-import { processZipFile, consolidateAnnualData, processHistoricalData, mergeExcelAndZips } from '@/services/fileService';
+import { processZipFile, consolidateAnnualData, processHistoricalData, mergeExcelAndZips, validateProcessedData } from '@/services/fileService';
 import { UploadSection } from '@/components/processor/UploadSection';
 import { ProcessingSection } from '@/components/processor/ProcessingSection';
 import { ResultsSection } from '@/components/processor/ResultsSection';
@@ -59,6 +59,7 @@ const Processor = () => {
     try {
       const data = await processZipFile(file, addLog, setProgress, cancellationSignal.current, year);
       setProcessedData(data);
+      setValidationWarnings(validateProcessedData(data, addLog));
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
@@ -90,6 +91,7 @@ const Processor = () => {
       }
       const consolidated = consolidateAnnualData(monthlyDataArray, addLog);
       setProcessedData(consolidated);
+      setValidationWarnings(validateProcessedData(consolidated, addLog));
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
@@ -109,6 +111,7 @@ const Processor = () => {
       const { data, yearRange } = await processHistoricalData(files, addLog, setProgress, cancellationSignal.current);
       setReportTitle(`Histórico ${yearRange}`);
       setProcessedData(data);
+      setValidationWarnings(validateProcessedData(data, addLog));
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
@@ -129,6 +132,7 @@ const Processor = () => {
       );
       setReportTitle(`Multi-Año (${stats.excels} xlsx + ${stats.zips} zip)`);
       setProcessedData(data);
+      setValidationWarnings(validateProcessedData(data, addLog));
       setAppState(AppState.RESULTS);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
