@@ -48,7 +48,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
   if (data['501'] && data['501'].length > 1) {
     const pedSet = new Set<string>();
     for (let i = 1; i < data['501'].length; i++) {
-      const ped = data['501'][i][PEDIMENTO_UNIFICADO_INDEX]; // Cambiado de 5 a la constante (0)
+      const ped = data['501'][i][PEDIMENTO_UNIFICADO_INDEX];
       if (ped && PEDIMENTO_REGEX.test(ped)) pedSet.add(ped);
     }
     uniquePedimentos = pedSet.size;
@@ -125,7 +125,7 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({ data, onReset, r
           </div>
           <p className="mt-3 text-xs text-muted-foreground italic">
             * <strong>Texto</strong> evita que Excel convierta "001" en "1". <strong>Numérico</strong> permite operaciones matemáticas.
-            La columna Pedimento siempre se exporta como texto.
+            Los identificadores se conservan como texto y las fechas válidas se exportan sin hora.
           </p>
         </div>
 

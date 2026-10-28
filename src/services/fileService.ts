@@ -1,757 +1,327 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { ProgressState, ProcessedData, ReportMode, ExportFormat } from '@/types/dataStage';
-import { FILE_NAMES, CRITICAL_FILES, MONTH_NAMES, COLUMN_HEADERS, generateFallbackHeaders, CLEAN_FILE_NAMES } from '@/constants/dataStage';
-import { enrichWithPedimentoUnificado, validateProcessedData } from '@/services/pedimentoService';
+import { MONTH_NAMES } from '@/constants/dataStage';
+import { enrichWithPedimentoUnificado, getYearFromResumen, normalizeColumn, validateProcessedData } from './pedimentoService';
 
 export { enrichWithPedimentoUnificado, validateProcessedData };
 
 const isValidAscEntry = (name: string): boolean => {
-  if (!name.toLowerCase().endsWith('.asc')) return false;
-  if (name.includes('__MACOSX/')) return false;
   const basename = name.split('/').pop() ?? '';
-  if (basename.startsWith('._')) return false;
-  return true;
+  return /\.asc$/i.test(name) && !name.split('/').includes('__MACOSX') && !basename.startsWith('._');
 };
 
-/** Encoding adaptativo: UTF-8 estricto primero, ISO-8859-1 como fallback. */
 const decodeBytes = (bytes: Uint8Array): string => {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return new TextDecoder('iso-8859-1').decode(bytes);
-  }
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { return new TextDecoder('iso-8859-1').decode(bytes); }
 };
 
-/** Junta fracciones partidas en 551/552 (ej. "12345678" + "99" → "1234567899"). */
-const applyGlobalFractionRule = (fileNumber: string, parts: string[]): string[] => {
-  if (fileNumber !== '551' && fileNumber !== '552') return parts;
-  const result = [...parts];
-  let fraccionIdx = -1;
-  const commonIndices = [4, 5, 6, 7, 8, 9];
-  for (const idx of commonIndices) {
-    if (result[idx] && /^\d{8}$/.test(result[idx])) {
-      fraccionIdx = idx;
-      break;
+/** Valida el calendario completo para evitar normalizar 31 de febrero a marzo. */
+export const parseDateOnly = (value: string): Date | null => {
+  const text = (value ?? '').trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}:\d{2})?$/);
+  const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const dmy = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  const match = iso ?? compact;
+  if (!match && !dmy) return null;
+  const [year, month, day] = match
+    ? [Number(match[1]), Number(match[2]), Number(match[3])]
+    : [Number(dmy![3]), Number(dmy![2]), Number(dmy![1])];
+  const date = new Date(0);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/;
+
+/** Mismo muestreo que la habilidad; los códigos de ocho dígitos siguen siendo texto. */
+export const detectDateColumns = (rows: string[][]): Set<number> => {
+  const result = new Set<number>();
+  for (let col = 0; col < (rows[0]?.length ?? 0); col++) {
+    let nonEmpty = 0, matches = 0;
+    for (let row = 1; row < rows.length && nonEmpty < 200; row++) {
+      const value = (rows[row][col] ?? '').trim();
+      if (!value) continue;
+      nonEmpty++;
+      if (ISO_DATE.test(value) && parseDateOnly(value)) matches++;
     }
-  }
-  if (fraccionIdx === -1) {
-    fraccionIdx = result.findIndex(p => /^\d{8}$/.test(p));
-  }
-  if (fraccionIdx !== -1) {
-    if (result[fraccionIdx + 1] && /^\d{2}$/.test(result[fraccionIdx + 1])) {
-      result[fraccionIdx] = result[fraccionIdx] + result[fraccionIdx + 1];
-      result[fraccionIdx + 1] = '';
-    } else {
-      for (let k = result.length - 1; k > fraccionIdx; k--) {
-        if (/^\d{2}$/.test(result[k])) {
-          result[fraccionIdx] = result[fraccionIdx] + result[k];
-          result[k] = '';
-          break;
-        }
-      }
-    }
+    if (nonEmpty && matches / nonEmpty >= 0.9) result.add(col);
   }
   return result;
 };
 
-/** Fuerza formato texto '@' a celdas con dígitos puros o ceros a la izquierda
- *  (fracciones, patentes, identificadores). Evita que Excel ampute ceros. */
-const applyTextFormatToSheet = (ws: any) => {
-  Object.keys(ws).forEach(key => {
-    if (key.startsWith('!')) return;
-    const cell = ws[key];
-    if (cell && cell.t === 's' && typeof cell.v === 'string') {
-      if (/^\d+$/.test(cell.v) || cell.v.startsWith('0')) {
-        cell.z = '@';
-      }
+/** Rechaza esquemas incompatibles antes de apilar; no elimina ninguna fila. */
+const appendTables = (target: ProcessedData, source: ProcessedData, label: string): void => {
+  for (const [key, rows] of Object.entries(source)) {
+    if (!rows.length) continue;
+    const previous = target[key];
+    if (previous && (previous[0].length !== rows[0].length || previous[0].some((h, i) => h !== rows[0][i]))) {
+      throw new Error(`${label}: los encabezados de la hoja ${key} no coinciden en nombre y orden. No se pueden combinar estos archivos.`);
     }
-  });
+    if (!previous) target[key] = [rows[0].slice()];
+    for (let i = 1; i < rows.length; i++) target[key].push(rows[i].slice());
+  }
 };
 
-// ===========================
-// FECHAS: detección por contenido y conversión a fecha real de Excel
-// ===========================
-
-/** Convierte un string de fecha (varios formatos del dominio) a Date (sin hora), o null si no matchea. */
-export const parseDateOnly = (value: string): Date | null => {
-  const trimmed = (value ?? '').trim();
-  if (!trimmed) return null;
-
-  // YYYYMMDD puro (8 dígitos)
-  if (/^\d{8}$/.test(trimmed)) {
-    const yyyy = parseInt(trimmed.substring(0, 4), 10);
-    const mm = parseInt(trimmed.substring(4, 6), 10);
-    const dd = parseInt(trimmed.substring(6, 8), 10);
-    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
-    return null;
-  }
-
-  // YYYY-MM-DD, con o sin hora (ej. "2026-01-05 17:40:22")
-  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}:\d{2})?$/);
-  if (isoMatch) {
-    const yyyy = parseInt(isoMatch[1], 10);
-    const mm = parseInt(isoMatch[2], 10);
-    const dd = parseInt(isoMatch[3], 10);
-    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
-    return null;
-  }
-
-  // DD/MM/YYYY o DD-MM-YYYY
-  const dmyMatch = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
-  if (dmyMatch) {
-    const dd = parseInt(dmyMatch[1], 10);
-    const mm = parseInt(dmyMatch[2], 10);
-    const yyyy = parseInt(dmyMatch[3], 10);
-    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(yyyy, mm - 1, dd);
-    return null;
-  }
-
-  return null;
-};
-
-/** Detecta qué columnas (por índice) son de fecha: ≥90% de valores no vacíos matchean un patrón de fecha.
- *  Por contenido, no por nombre — así "TipoFecha" (código numérico) no se confunde con una fecha real. */
-export const detectDateColumns = (rows: string[][]): Set<number> => {
-  const dateCols = new Set<number>();
-  if (rows.length < 2) return dateCols;
-  const numCols = rows[0].length;
-
-  for (let col = 0; col < numCols; col++) {
-    let nonEmpty = 0;
-    let matches = 0;
-    for (let r = 1; r < rows.length; r++) {
-      const raw = (rows[r][col] ?? '').trim();
-      if (!raw) continue;
-      nonEmpty++;
-      if (parseDateOnly(raw) !== null) matches++;
+const parseAsc = (content: string, name: string): string[][] => {
+  const lines = content.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim() !== '');
+  if (!lines.length) return [];
+  if (!lines[0].includes('|')) throw new Error(`${name}: no contiene encabezados separados por pipes '|'.`);
+  const header = lines[0].split('|');
+  const indices = header.map((_, i) => i).filter(i => header[i] !== '' && !header[i].startsWith('Unnamed'));
+  const names = indices.map(i => header[i]);
+  if (new Set(names).size !== names.length) throw new Error(`${name}: contiene encabezados duplicados.`);
+  return [names, ...lines.slice(1).map((line, index) => {
+    const fields = line.split('|');
+    if (fields.slice(header.length).some(value => value !== '')) {
+      throw new Error(`${name}: la fila ${index + 2} tiene más valores que encabezados.`);
     }
-    if (nonEmpty > 0 && matches / nonEmpty >= 0.9) dateCols.add(col);
-  }
-  return dateCols;
-};
-
-/** Aplica fecha real de Excel (sin hora, formato dd/mm/yyyy) a las columnas detectadas como fecha. */
-const applyDateFormatToSheet = (ws: XLSX.WorkSheet, headerRow: string[], dateCols: Set<number>) => {
-  if (dateCols.size === 0) return;
-  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:A1');
-  for (let r = range.s.r + 1; r <= range.e.r; r++) {
-    for (const col of dateCols) {
-      const addr = XLSX.utils.encode_cell({ r, c: col });
-      const cell = ws[addr];
-      if (!cell || cell.t !== 's' || typeof cell.v !== 'string') continue;
-      const parsed = parseDateOnly(cell.v);
-      if (parsed) {
-        cell.t = 'd';
-        cell.v = parsed;
-        cell.z = 'dd/mm/yyyy';
-      }
+    if (fields.some((value, i) => i < header.length && !indices.includes(i) && value !== '')) {
+      throw new Error(`${name}: la fila ${index + 2} contiene datos en una columna sin encabezado.`);
     }
-  }
+    return indices.map(i => fields[i] ?? '');
+  })];
 };
 
-/**
- * Empaqueta uno o más archivos .asc sueltos en un .zip en memoria, para reutilizar
- * el mismo pipeline (detección de periodo, processZipFile) sin duplicar lógica.
- */
+const fileKeyFromAsc = (name: string): string => {
+  const basename = name.split('/').pop()!.replace(/\.asc$/i, '');
+  const token = basename.slice(basename.lastIndexOf('_') + 1);
+  return ['Resumen', 'Inci', 'Sel'].find(key => key.toLowerCase() === token.toLowerCase()) ?? token;
+};
+
+const readZipTables = async (file: File, onProgress: (progress: ProgressState) => void, signal: { current: boolean }): Promise<ProcessedData> => {
+  const zip = await JSZip.loadAsync(file);
+  const files = Object.keys(zip.files).filter(name => !zip.files[name].dir && isValidAscEntry(name));
+  if (!files.length) throw new Error('No se encontraron archivos .asc en el ZIP.');
+  const data: ProcessedData = {};
+  for (let i = 0; i < files.length; i++) {
+    if (signal.current) throw new Error('Operation cancelled by user.');
+    const name = files[i];
+    const rows = parseAsc(decodeBytes(await zip.file(name)!.async('uint8array')), name);
+    if (rows.length) appendTables(data, { [fileKeyFromAsc(name)]: rows }, name);
+    onProgress({ total: Math.round(((i + 1) / files.length) * 100), file: 100, fileName: name });
+  }
+  if (!Object.keys(data).length) throw new Error('Los archivos .asc no contienen encabezados ni datos.');
+  return data;
+};
+
 export const buildZipFromAscFiles = async (files: File[]): Promise<File> => {
   const zip = new JSZip();
-  for (const file of files) {
-    // JSZip acepta un File/Blob directamente como contenido (lo resuelve internamente),
-    // sin necesidad de convertirlo a ArrayBuffer manualmente.
-    zip.file(file.name, file);
-  }
-  const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
-  const zipName = files.length === 1
-    ? `${files[0].name.replace(/\.asc$/i, '')}.zip`
-    : 'archivos_asc.zip';
-  return new File([zipBuffer], zipName, { type: 'application/zip' });
+  for (const file of files) zip.file(file.name, file);
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+  return new File([buffer], files.length === 1 ? files[0].name.replace(/\.asc$/i, '.zip') : 'archivos_asc.zip', { type: 'application/zip' });
 };
 
 export const detectPeriodFromZipFile = async (file: File): Promise<{ month: string | null; year: number | null }> => {
   try {
-    const zip = await JSZip.loadAsync(file);
-    const ascFiles = Object.keys(zip.files).filter(name => isValidAscEntry(name));
-    if (ascFiles.length === 0) return { month: null, year: null };
-
-    const file501 = ascFiles.find(name => name.includes('501'));
-    const targetFiles = file501 ? [file501, ...ascFiles.filter(f => f !== file501)] : ascFiles;
-
-    const monthCounts: Record<number, number> = {};
-    const yearCounts: Record<number, number> = {};
-
-    for (const ascFileName of targetFiles.slice(0, 5)) {
-      const content = await zip.file(ascFileName)!.async('string');
-      const lines = content.split(/\r?\n/).slice(0, 200);
-
-      lines.forEach(line => {
-        const parts = line.split('|');
-        parts.forEach(field => {
-          const trimmed = field.trim();
-          if (trimmed.length === 8 && /^\d{8}$/.test(trimmed)) {
-            const yr = parseInt(trimmed.substring(0, 4), 10);
-            const mo = parseInt(trimmed.substring(4, 6), 10);
-            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
-              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
-              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
-            }
-          }
-          const dateMatch = trimmed.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
-          if (dateMatch) {
-            const mo = parseInt(dateMatch[2], 10);
-            const yr = parseInt(dateMatch[3], 10);
-            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
-              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
-              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
-            }
-          }
-          // YYYY-MM-DD, con o sin hora (ej. "2026-01-05 17:40:22") — formato real de FechaPago/FechaRecepcion
-          const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s|$)/);
-          if (isoMatch) {
-            const yr = parseInt(isoMatch[1], 10);
-            const mo = parseInt(isoMatch[2], 10);
-            if (mo >= 1 && mo <= 12 && yr >= 2000 && yr <= 2099) {
-              monthCounts[mo] = (monthCounts[mo] || 0) + 1;
-              yearCounts[yr] = (yearCounts[yr] || 0) + 1;
-            }
-          }
-        });
-      });
-
-      const totalCounts = Object.values(monthCounts).reduce((a, b) => a + b, 0);
-      if (totalCounts >= 20) break;
+    const data = await readZipTables(file, () => {}, { current: false });
+    const resumen = data['Resumen'];
+    const index = resumen?.[0].findIndex(name => ['fechainicial', 'fechainicialconsulta'].includes(normalizeColumn(name))) ?? -1;
+    const summaryDate = index >= 0 ? parseDateOnly(resumen[1]?.[index] ?? '') : null;
+    const counts = new Map<string, { month: string; year: number; count: number }>();
+    const tables = [data['501'], ...Object.entries(data).filter(([key]) => key !== '501' && key !== 'Resumen').map(([, rows]) => rows)];
+    for (const rows of tables) {
+      if (!rows) continue;
+      const dateIndices = rows[0].map((name, i) => /fecha/i.test(name) ? i : -1).filter(i => i >= 0);
+      for (const row of rows.slice(1, 201)) {
+        for (const index of dateIndices) {
+          const value = row[index] ?? '';
+          const date = parseDateOnly(value);
+          if (!date || date.getFullYear() < 2000 || date.getFullYear() > 2099) continue;
+          const key = `${date.getFullYear()}-${date.getMonth()}`;
+          const entry = counts.get(key) ?? { month: MONTH_NAMES[date.getMonth()], year: date.getFullYear(), count: 0 };
+          entry.count++;
+          counts.set(key, entry);
+        }
+      }
+      if (counts.size) break;
     }
-
-    let maxMonthCount = 0, detectedMonth: number | null = null;
-    for (const [m, count] of Object.entries(monthCounts)) {
-      if (count > maxMonthCount) { maxMonthCount = count; detectedMonth = parseInt(m, 10); }
-    }
-    let maxYearCount = 0, detectedYear: number | null = null;
-    for (const [y, count] of Object.entries(yearCounts)) {
-      if (count > maxYearCount) { maxYearCount = count; detectedYear = parseInt(y, 10); }
-    }
-
-    return {
-      month: detectedMonth !== null ? MONTH_NAMES[detectedMonth - 1] : null,
-      year: detectedYear,
-    };
-  } catch (e) {
-    console.error("Error detectando periodo desde contenido:", e);
+    const best = [...counts.values()].sort((a, b) => b.count - a.count)[0];
+    return { month: best?.month ?? (summaryDate ? MONTH_NAMES[summaryDate.getMonth()] : null), year: Number(getYearFromResumen(data)) || best?.year || null };
+  } catch {
+    return { month: null, year: null };
   }
-  return { month: null, year: null };
 };
 
 export const processZipFile = async (
-  file: File,
-  onLog: (message: string) => void,
-  onProgress: (progress: ProgressState) => void,
-  cancellationSignal: { current: boolean },
-  year?: number
+  file: File, onLog: (message: string) => void, onProgress: (progress: ProgressState) => void,
+  cancellationSignal: { current: boolean }, year?: number,
 ): Promise<ProcessedData> => {
-  onLog('Iniciando análisis del archivo ZIP...');
-  const zip = await JSZip.loadAsync(file);
-
-  const innerZips = Object.keys(zip.files).filter(
-    name => !zip.files[name].dir
-      && name.toLowerCase().endsWith('.zip')
-      && !name.includes('__MACOSX/'),
-  );
-  if (innerZips.length > 0) {
-    throw new Error(
-      `Este ZIP contiene ${innerZips.length} ZIP(s) internos (${innerZips.slice(0, 3).map(n => n.split('/').pop()).join(', ')}${innerZips.length > 3 ? '...' : ''}). ` +
-      `Extraiga los archivos ZIP internos y súbalos directamente.`,
-    );
-  }
-
-  const files = Object.keys(zip.files).filter(name => !zip.files[name].dir && isValidAscEntry(name));
-
-  onLog(`Archivos .asc encontrados en el ZIP (${files.length}): ${files.join(', ')}`);
-
-  if (files.length === 0) {
-    throw new Error('No se encontraron archivos .asc en el ZIP.');
-  }
-
-  const processedData: ProcessedData = {};
-  const totalFiles = files.length;
-
-  for (let i = 0; i < totalFiles; i++) {
-    const fileName = files[i];
-
-    if (cancellationSignal.current) {
-      onLog('Proceso cancelado por el usuario.');
-      throw new Error('Operation cancelled by user.');
-    }
-
-    const nameWithoutExtension = fileName.split('.')[0];
-    const parts = nameWithoutExtension.split('_');
-    const fileNumber = parts[parts.length - 1];
-
-    try {
-      onProgress({ total: Math.round((i / totalFiles) * 100), file: 0, fileName });
-      onLog(`[${i + 1}/${totalFiles}] Procesando ${fileName}...`);
-
-      const contentAsUint8Array = await zip.file(fileName)!.async('uint8array');
-      const content = decodeBytes(contentAsUint8Array);
-
-      if (!content) {
-        onLog(`Advertencia: ${fileName} está vacío - Saltando...`);
-        continue;
-      }
-
-      const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-
-      if (lines.length > 0 && !lines[0].includes('|')) {
-        onLog(`Error de formato: El archivo ${fileName} no parece estar separado por pipes '|'.`);
-        continue;
-      }
-      onProgress({ total: Math.round((i / totalFiles) * 100), file: 50, fileName });
-
-      const rawRows = lines.map(line => line.split('|').map(field => field.trim().replace(/\r/g, '')));
-      const maxCols = rawRows.reduce((m, r) => Math.max(m, r.length), 0);
-      const uniformRows = rawRows.map(r => {
-        while (r.length < maxCols) r.push('');
-        return applyGlobalFractionRule(fileNumber, r);
-      });
-
-      processedData[fileNumber] = uniformRows;
-
-      onLog(`✅ ${fileName} procesado correctamente con ${lines.length} registros.`);
-      onProgress({ total: Math.round(((i + 1) / totalFiles) * 100), file: 100, fileName });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      onLog(`❌ Error procesando ${fileName}: ${errorMessage}`);
-      console.error(`Error processing ${fileName}:`, error);
-    }
-  }
-
-  if (Object.keys(processedData).length === 0 && !cancellationSignal.current) {
-    throw new Error('No se pudo procesar ningún archivo .asc correctamente.');
-  }
-
-  const missingCritical = CRITICAL_FILES.filter(id => !processedData[id]);
-  if (missingCritical.length > 0) {
-    onLog(`⚠️ ATENCIÓN: Faltan archivos críticos: ${missingCritical.map(id => `${id} (${FILE_NAMES[id] || 'N/A'})`).join(', ')}`);
-  }
-
-  // Extraer año del Resumen.asc como fallback canónico (referencia: CLAUDE.md Data stage)
-  let yearFromResumen: string | undefined;
-  if (processedData['Resumen'] && processedData['Resumen'].length > 0) {
-    const resumenRow = processedData['Resumen'][1] ?? processedData['Resumen'][0];
-    for (const field of resumenRow) {
-      const trimmed = (field ?? '').trim();
-      const m = trimmed.match(/^(\d{4})/);
-      if (m) {
-        const yr = parseInt(m[1], 10);
-        if (yr >= 2000 && yr <= 2099) {
-          yearFromResumen = m[1].substring(2, 4);
-          break;
-        }
-      }
-    }
-    if (yearFromResumen) onLog(`📅 Año del Resumen.asc: 20${yearFromResumen}`);
-  }
-  if (!yearFromResumen && year) {
-    yearFromResumen = String(year).slice(-2);
-  }
-
-  onLog('--- Enriqueciendo datos con Pedimento Unificado ---');
-  const enrichedData = enrichWithPedimentoUnificado(processedData, onLog, yearFromResumen);
-  onLog('--- Validando integridad de datos ---');
-  validateProcessedData(enrichedData, onLog);
-  return enrichedData;
+  const raw = await readZipTables(file, onProgress, cancellationSignal);
+  const canonicalYear = getYearFromResumen(raw) ?? String(year ?? new Date().getFullYear());
+  onLog(`📅 Año del ZIP: ${canonicalYear}`);
+  const data = enrichWithPedimentoUnificado(raw, onLog, canonicalYear);
+  validateProcessedData(data, onLog);
+  return data;
 };
 
-/**
- * Consolidación anual: Mes y Año ya vienen incluidos en cada fila desde el transform.
- * Solo concatena datos de cada mes sin inyectar columnas adicionales.
- */
 export const consolidateAnnualData = (
-  monthlyData: { month: string; data: ProcessedData }[],
-  onLog: (message: string) => void
+  monthlyData: { month: string; data: ProcessedData }[], onLog: (message: string) => void,
 ): ProcessedData => {
-  const consolidated: ProcessedData = {};
-
-  const allFileKeys = new Set<string>();
-  monthlyData.forEach(({ data }) => {
-    Object.keys(data).forEach(key => allFileKeys.add(key));
-  });
-
-  onLog(`Iniciando consolidación anual. Tipos de archivos detectados: ${allFileKeys.size}`);
-
-  const sortedMonthlyData = [...monthlyData].sort((a, b) => {
-    return MONTH_NAMES.indexOf(a.month) - MONTH_NAMES.indexOf(b.month);
-  });
-
-  sortedMonthlyData.forEach(({ month, data }) => {
-    const monthFiles = Object.keys(data);
-
-    const missingCritical = CRITICAL_FILES.filter(id => !monthFiles.includes(id));
-    if (missingCritical.length > 0) {
-      onLog(`⚠️ Mes ${month}: Faltan archivos CRÍTICOS: ${missingCritical.join(', ')}`);
-    }
-
-    Object.entries(data).forEach(([fileKey, records]) => {
-      if (!consolidated[fileKey]) {
-        consolidated[fileKey] = [];
-        if (records.length > 0) {
-          // Header row — Mes/Anio already in headers from transform
-          consolidated[fileKey].push([...records[0]]);
-        }
-      }
-      // Data rows already contain Mes/Anio from per-row extraction
-      const dataRows = records.slice(1);
-      consolidated[fileKey].push(...dataRows.map(r => [...r]));
-    });
-  });
-
-  onLog(`Consolidación finalizada. Total de tipos de archivo: ${Object.keys(consolidated).length}`);
-  return consolidated;
+  const data: ProcessedData = {};
+  for (const source of monthlyData) appendTables(data, source.data, source.month);
+  onLog(`✅ Consolidación: ${monthlyData.length} periodos en el orden recibido`);
+  return data;
 };
 
-/**
- * Procesamiento histórico: Mes y Año ya vienen incluidos en cada fila desde el transform.
- * Solo concatena datos de cada ZIP sin inyectar columnas adicionales.
- */
 export const processHistoricalData = async (
-  files: File[],
-  onLog: (msg: string) => void,
-  onProgress: (prog: ProgressState) => void,
-  cancellationSignal: { current: boolean }
-): Promise<{ data: ProcessedData; yearRange: string }> => {
-  const consolidated: ProcessedData = {};
-  const yearsSet = new Set<number>();
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    onLog(`--- [${i + 1}/${files.length}] Procesando ZIP: ${file.name} ---`);
-    onProgress({ total: Math.round((i / files.length) * 100), file: 0, fileName: file.name });
-
-    const { year } = await detectPeriodFromZipFile(file);
-    if (year) {
-      yearsSet.add(year);
-      onLog(`Año detectado: ${year}`);
-    }
-
-    // Process ZIP — Mes/Anio embedded per-row by transform
-    const data = await processZipFile(file, onLog, onProgress, cancellationSignal, year || undefined);
-
-    // Merge into consolidated
-    Object.entries(data).forEach(([fileKey, records]) => {
-      if (!consolidated[fileKey]) {
-        consolidated[fileKey] = [];
-        if (records.length > 0) {
-          consolidated[fileKey].push([...records[0]]);
-        }
-      }
-      const dataRows = records.slice(1);
-      consolidated[fileKey].push(...dataRows.map(r => [...r]));
-    });
-
-    onLog(`♻️ ZIP ${file.name} procesado y liberado de memoria`);
-  }
-
-  const years = Array.from(yearsSet).sort();
-  const minYear = years[0] || 0;
-  const maxYear = years[years.length - 1] || 0;
-  const yearRange = minYear === maxYear ? `${minYear}` : `${minYear}-${maxYear}`;
-
-  onLog(`✅ Histórico generado: ${Object.keys(consolidated).length} tablas, rango ${yearRange}`);
-  return { data: consolidated, yearRange };
-};
-
-// ===========================
-// MERGE: Excel(s) previos + ZIP(s) nuevos con dedup por Pedimento_Unificado
-// ===========================
-
-/** Normaliza un nombre de hoja del Excel a la clave canónica (501, 551, Inci, etc.) */
-const normalizeSheetNameToFileKey = (sheetName: string): string => {
-  const cleaned = sheetName.trim();
-  const numMatch = cleaned.match(/^(\d{3})/);
-  if (numMatch) return numMatch[1];
-  const tokens = ['Inci', 'Sel', 'Resumen'];
-  for (const t of tokens) {
-    if (cleaned.toLowerCase().includes(t.toLowerCase())) return t;
-  }
-  return cleaned.split(/[\s_-]/)[0];
-};
-
-/** Detecta el índice de la columna Pedimento_Unificado / PedimentoUnificado en un header.
- *  Devuelve -1 si la hoja viene en formato Gemini (sin esa columna). */
-const findPedimentoUnificadoCol = (header: string[]): number => {
-  return header.findIndex(h => {
-    const norm = String(h ?? '').toLowerCase().replace(/[_\s-]/g, '');
-    return norm === 'pedimentounificado';
-  });
-};
-
-/** Lee un .xlsx y lo convierte a ProcessedData. Autodetecta formato Lovable/Gemini. */
-const readExcelToProcessedData = async (
-  file: File,
-  onLog: (msg: string) => void,
-): Promise<{ data: ProcessedData; format: 'lovable' | 'gemini' | 'unknown' }> => {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const result: ProcessedData = {};
-  let detectedFormat: 'lovable' | 'gemini' | 'unknown' = 'unknown';
-
-  for (const sheetName of wb.SheetNames) {
-    const ws = wb.Sheets[sheetName];
-    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false })
-      .map((r: any[]) => r.map(c => (c == null ? '' : String(c).trim())));
-    if (rows.length === 0) continue;
-
-    const fileKey = normalizeSheetNameToFileKey(sheetName);
-    const puCol = findPedimentoUnificadoCol(rows[0]);
-    if (puCol >= 0 && detectedFormat === 'unknown') detectedFormat = 'lovable';
-    if (puCol < 0 && detectedFormat === 'unknown') detectedFormat = 'gemini';
-
-    if (!result[fileKey]) {
-      result[fileKey] = rows;
-    } else {
-      result[fileKey].push(...rows.slice(1));
-    }
-  }
-
-  onLog(`📂 ${file.name}: ${Object.keys(result).length} hojas, formato detectado: ${detectedFormat}`);
-  return { data: result, format: detectedFormat };
-};
-
-/**
- * Merge avanzado: combina N Excel previos + N ZIPs nuevos en un solo ProcessedData.
- * - Autodetecta formato Lovable (con Pedimento_Unificado) o Gemini (sin él).
- * - Si todas las fuentes tienen Pedimento_Unificado: dedup por esa columna.
- * - Si alguna fuente es formato Gemini: apila sin dedup y advierte.
- * - Los ZIPs nuevos siempre se enriquecen vía processZipFile (genera Pedimento_Unificado).
- */
-export const mergeExcelAndZips = async (
-  excelFiles: File[],
-  zipFiles: File[],
-  onLog: (msg: string) => void,
-  onProgress: (prog: ProgressState) => void,
+  files: File[], onLog: (message: string) => void, onProgress: (progress: ProgressState) => void,
   cancellationSignal: { current: boolean },
-): Promise<{ data: ProcessedData; stats: { excels: number; zips: number; duplicatesRemoved: number; rowsAdded: number } }> => {
-  const totalSteps = excelFiles.length + zipFiles.length;
-  let step = 0;
-  const stats = { excels: excelFiles.length, zips: zipFiles.length, duplicatesRemoved: 0, rowsAdded: 0 };
-
-  if (totalSteps === 0) {
-    throw new Error('Debes subir al menos un Excel previo o un ZIP nuevo.');
+): Promise<{ data: ProcessedData; yearRange: string }> => {
+  const data: ProcessedData = {};
+  const years = new Set<string>();
+  for (const file of files) {
+    const source = await processZipFile(file, onLog, onProgress, cancellationSignal);
+    appendTables(data, source, file.name);
+    const year = getYearFromResumen(source);
+    if (year) years.add(year);
+    else {
+      for (const row of source['501']?.slice(1) ?? []) years.add(`20${row[0].slice(0, 2)}`);
+    }
   }
+  const sorted = [...years].sort();
+  const yearRange = !sorted.length ? '' : sorted[0] === sorted[sorted.length - 1] ? sorted[0] : `${sorted[0]}-${sorted[sorted.length - 1]}`;
+  return { data, yearRange };
+};
 
-  const sources: { name: string; data: ProcessedData; format: 'lovable' | 'gemini' | 'unknown' }[] = [];
+const normalizeSheetNameToFileKey = (name: string): string => {
+  const type = name.match(/_(\d{3})$/) ?? name.match(/^(\d{3})(?:$|[_\s-])/);
+  if (type) return type[1];
+  return ['Resumen', 'Inci', 'Sel'].find(key => name.toLowerCase().includes(key.toLowerCase())) ?? name;
+};
 
-  // 1) Leer todos los Excels previos
+const readExcelToProcessedData = async (file: File): Promise<ProcessedData> => {
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+  const data: ProcessedData = {};
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+    if (!rows.length) continue;
+    // Normaliza fechas de Excel a ISO para la detección por contenido y deja vacíos como vacíos.
+    const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
+    for (let row = 1; row < rows.length; row++) {
+      rows[row] = rows[0].map((_, col) => {
+        const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r + row, c: range.s.c + col })];
+        if (cell?.t === 'd' && cell.v instanceof Date) {
+          const date = cell.v;
+          return `${date.getFullYear().toString().padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+        return String(rows[row][col] ?? '');
+      });
+    }
+    appendTables(data, { [normalizeSheetNameToFileKey(name)]: rows }, file.name);
+  }
+  if (!Object.keys(data).length) throw new Error(`${file.name}: no contiene hojas con encabezados.`);
+  return enrichWithPedimentoUnificado(data, () => {});
+};
+
+/** Apila las fuentes completas, incluidas partidas repetidas del mismo pedimento. */
+export const mergeExcelAndZips = async (
+  excelFiles: File[], zipFiles: File[], onLog: (message: string) => void,
+  onProgress: (progress: ProgressState) => void, cancellationSignal: { current: boolean },
+): Promise<{ data: ProcessedData; stats: { excels: number; zips: number; duplicatesRemoved: number; rowsAdded: number } }> => {
+  if (!excelFiles.length && !zipFiles.length) throw new Error('Debes subir al menos un Excel previo o un ZIP nuevo.');
+  const data: ProcessedData = {};
   for (const file of excelFiles) {
     if (cancellationSignal.current) throw new Error('Operation cancelled by user.');
-    onLog(`📥 Leyendo Excel previo: ${file.name}`);
-    onProgress({ total: Math.round((step / totalSteps) * 100), file: 0, fileName: file.name });
-    if (!file.name.toLowerCase().endsWith('.xlsx')) {
-      throw new Error(`${file.name}: solo se aceptan archivos .xlsx`);
-    }
-    const { data, format } = await readExcelToProcessedData(file, onLog);
-    sources.push({ name: file.name, data, format });
-    step++;
-    onProgress({ total: Math.round((step / totalSteps) * 100), file: 100, fileName: file.name });
+    if (!/\.xlsx$/i.test(file.name)) throw new Error(`${file.name}: solo se aceptan archivos .xlsx`);
+    appendTables(data, await readExcelToProcessedData(file), file.name);
   }
-
-  // 2) Procesar todos los ZIPs nuevos (siempre formato Lovable porque pasan por enrichment)
-  for (const file of zipFiles) {
-    if (cancellationSignal.current) throw new Error('Operation cancelled by user.');
-    onLog(`📦 Procesando ZIP nuevo: ${file.name}`);
-    const data = await processZipFile(file, onLog, onProgress, cancellationSignal);
-    sources.push({ name: file.name, data, format: 'lovable' });
-    step++;
-  }
-
-  // 3) Determinar si podemos deduplicar (todas las fuentes deben tener Pedimento_Unificado)
-  const allLovable = sources.every(s => s.format === 'lovable');
-  if (!allLovable) {
-    onLog(`⚠️ No todas las fuentes tienen Pedimento_Unificado. Apilando sin deduplicar.`);
-  } else {
-    onLog(`🔑 Todas las fuentes tienen Pedimento_Unificado. Dedup activo.`);
-  }
-
-  // 4) Consolidar
-  const merged: ProcessedData = {};
-  const seenByKey: Record<string, Set<string>> = {};
-
-  for (const src of sources) {
-    for (const [fileKey, rows] of Object.entries(src.data)) {
-      if (rows.length === 0) continue;
-      if (!merged[fileKey]) {
-        merged[fileKey] = [rows[0]];
-        seenByKey[fileKey] = new Set();
-      }
-      const header = merged[fileKey][0];
-      const puCol = allLovable ? findPedimentoUnificadoCol(header) : -1;
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (puCol >= 0) {
-          const ped = (row[puCol] ?? '').trim();
-          if (ped && seenByKey[fileKey].has(ped)) {
-            stats.duplicatesRemoved++;
-            continue;
-          }
-          if (ped) seenByKey[fileKey].add(ped);
-        }
-        merged[fileKey].push(row);
-        stats.rowsAdded++;
-      }
-    }
-  }
-
-  onLog(`✅ Merge completo: ${stats.excels} Excel(s) + ${stats.zips} ZIP(s), ${stats.rowsAdded} filas nuevas, ${stats.duplicatesRemoved} duplicados omitidos.`);
-  return { data: merged, stats };
+  for (const file of zipFiles) appendTables(data, await processZipFile(file, onLog, onProgress, cancellationSignal), file.name);
+  const rowsAdded = Object.values(data).reduce((sum, rows) => sum + rows.length - 1, 0);
+  onLog(`✅ ${rowsAdded} filas conservadas, sin eliminar partidas por pedimento`);
+  return { data, stats: { excels: excelFiles.length, zips: zipFiles.length, duplicatesRemoved: 0, rowsAdded } };
 };
 
-const prepareDataForExcel = (data: string[][], format: ExportFormat) => {
-  if (format === ExportFormat.TEXT) return data;
+/** El modo numérico es opcional; los identificadores y las fechas siguen protegidos. */
+const isIdentifier = (header: string): boolean => /pedimento|patente|aduana|fraccion|subdivision|codigo|clave|rfc|curp|guia|folio|secuencia|cuenta|permiso|^cp|^id|^numero/i.test(normalizeColumn(header));
 
-  return data.map((row, rowIndex) => {
-    if (rowIndex === 0) return row;
-    return row.map((cell, colIndex) => {
-      // Proteger las 6 columnas llave (Mes, Anio, Patente, Pedimento, SeccionAduanera, PedimentoUnificado)
-      if (colIndex <= 5) return cell;
-      if (cell === '' || cell === null || cell === undefined) return '';
-      const cellStr = String(cell).trim();
-      if (/^-?\d*\.?\d+$/.test(cellStr)) {
-        if (cellStr === '0') return 0;
-        if (cellStr.startsWith('0') && !cellStr.startsWith('0.')) return cellStr;
-        const num = parseFloat(cellStr);
-        return isNaN(num) ? cellStr : num;
+const createReportSheet = (rows: string[][], format: ExportFormat): XLSX.WorkSheet => {
+  const dates = detectDateColumns(rows);
+  const values: (string | number)[][] = rows.map((row, r) => row.map((value, col) => {
+    if (r === 0 || format === ExportFormat.TEXT || isIdentifier(rows[0][col]) || dates.has(col)) return value;
+    if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value) && value.replace(/\D/g, '').length <= 15) return Number(value);
+    return value;
+  }));
+  const sheet = XLSX.utils.aoa_to_sheet(values);
+  for (let r = 1; r < rows.length; r++) {
+    for (let col = 0; col < rows[0].length; col++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: col })];
+      if (!cell) continue;
+      if (cell.t === 's') cell.z = '@';
+      if (dates.has(col)) {
+        const date = parseDateOnly(rows[r][col] ?? '');
+        if (date) {
+          // Excel guarda días, sin zona horaria. Evita el desfase histórico
+          // de SheetJS al convertir Date locales contra su época de 1899.
+          const utc = new Date(0);
+          utc.setUTCFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+          utc.setUTCHours(0, 0, 0, 0);
+          let serial = (utc.getTime() - Date.UTC(1899, 11, 30)) / 86400000;
+          if (serial > 0 && serial < 61) serial--; // Calendario Excel anterior al 1/3/1900.
+          cell.t = 'n'; cell.v = serial; cell.z = 'dd/mm/yyyy';
+        }
       }
-      return cellStr;
+    }
+  }
+  if (rows[0]?.length) {
+    sheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(rows[0].length - 1)}1` };
+    sheet['!cols'] = rows[0].map((header, col) => {
+      let width = header.length;
+      let sampled = 0;
+      for (let r = 1; r < rows.length && (col === 0 || sampled < 500); r++) {
+        const value = rows[r][col] ?? '';
+        if (value !== '') { width = Math.max(width, String(value).length); sampled++; }
+      }
+      return { wch: Math.max(10, Math.min(60, width + 2)) };
     });
-  });
+  }
+  return sheet;
+};
+
+const sortedSections = (data: ProcessedData): string[] => Object.keys(data).sort((a, b) => {
+  const diff = (/^\d+$/.test(a) ? Number(a) : Infinity) - (/^\d+$/.test(b) ? Number(b) : Infinity);
+  return Number.isNaN(diff) || diff === 0 ? (a < b ? -1 : a > b ? 1 : 0) : diff;
+});
+
+export const createReportWorkbook = (data: ProcessedData, format = ExportFormat.TEXT): XLSX.WorkBook => {
+  const workbook = XLSX.utils.book_new();
+  for (const section of sortedSections(data)) {
+    if (!data[section].length) continue;
+    const name = section.replace(/[:\\/?*[\]]/g, '_').slice(0, 31);
+    XLSX.utils.book_append_sheet(workbook, createReportSheet(data[section], format), name);
+  }
+  return workbook;
+};
+
+const downloadBlob = (blob: Blob, filename: string): void => {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
 };
 
 export const generateSeparateSheetsExcelReport = (
-  data: ProcessedData,
-  title: string,
-  year: number,
-  reportMode: ReportMode,
-  format: ExportFormat = ExportFormat.TEXT
-) => {
-  try {
-    const exportWarnings = validateProcessedData(data, (msg) => console.log(`[export-validation] ${msg}`));
-    if (exportWarnings.length > 0) {
-      console.warn(`Excel export: ${exportWarnings.length} advertencias`, exportWarnings);
-    }
-
-    const wb = XLSX.utils.book_new();
-    const sectionsToExport = Object.keys(data);
-
-    sectionsToExport.forEach(section => {
-      if (data[section]) {
-        const preparedData = prepareDataForExcel(data[section], format);
-        const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
-        const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
-        const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-        if (format === ExportFormat.TEXT) {
-          applyTextFormatToSheet(ws);
-        }
-
-        const dateCols = detectDateColumns(data[section]);
-        applyDateFormatToSheet(ws, headerRow, dateCols);
-
-        if (headerRow.length > 0) {
-          const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
-          ws['!autofilter'] = { ref: `A1:${lastCol}1` };
-          ws['!cols'] = headerRow.map((header: any) => ({
-            wch: Math.max(String(header).length + 2, 12)
-          }));
-        }
-
-        const rawName = CLEAN_FILE_NAMES[section] || section;
-        const sheetName = rawName.replace(/[:\\\/\?\*\[\]]/g, '_').substring(0, 31);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-    });
-
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-    let fileName = `Reporte_Consolidado_${title.replace(/\s/g, '_')}_${year}.xlsx`;
-    if (reportMode === ReportMode.MONTHLY) {
-      fileName = `${title.replace(/\s/g, '_')}.xlsx`;
-    } else if (reportMode === ReportMode.HISTORICAL) {
-      fileName = `Data_Stage_Historico.xlsx`;
-    }
-
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-  } catch (error) {
-    console.error('Error generating consolidated report:', error);
-    alert('Ocurrió un error al generar el reporte consolidado.');
-  }
+  data: ProcessedData, title: string, year: number, reportMode: ReportMode, format = ExportFormat.TEXT,
+): void => {
+  const workbook = createReportWorkbook(data, format);
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const name = title.trim().replace(/\.xlsx$/i, '') || `Data_Stage_${reportMode}_${year}`;
+  downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${name}.xlsx`);
 };
 
 export const generateIndividualExcelFiles = async (
-  data: ProcessedData,
-  title: string,
-  year: number,
-  reportMode: ReportMode,
-  format: ExportFormat = ExportFormat.TEXT
-) => {
-  try {
-    const zip = new JSZip();
-    const sectionsToExport = Object.keys(data);
-
-    sectionsToExport.forEach(section => {
-      if (data[section]) {
-        const wb = XLSX.utils.book_new();
-        const preparedData = prepareDataForExcel(data[section], format);
-        const headerRow = preparedData[0] ?? COLUMN_HEADERS[section] ?? [];
-        const sheetData = preparedData.length > 0 ? preparedData : (headerRow.length > 0 ? [headerRow] : []);
-        const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-        if (format === ExportFormat.TEXT) {
-          applyTextFormatToSheet(ws);
-        }
-
-        const dateCols = detectDateColumns(data[section]);
-        applyDateFormatToSheet(ws, headerRow, dateCols);
-
-        if (headerRow.length > 0) {
-          const lastCol = XLSX.utils.encode_col(headerRow.length - 1);
-          ws['!autofilter'] = { ref: `A1:${lastCol}1` };
-          ws['!cols'] = headerRow.map((header: any) => ({
-            wch: Math.max(String(header).length + 2, 12)
-          }));
-        }
-
-        const rawName = CLEAN_FILE_NAMES[section] || section;
-        const sheetName = rawName.replace(/[:\\\/\?\*\[\]]/g, '_').substring(0, 31);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        zip.file(`${CLEAN_FILE_NAMES[section] || section}.xlsx`, excelBuffer);
-      }
-    });
-
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-
-    let fileName = `Data_Stage_Individual_${title.replace(/\s/g, '_')}_${year}.zip`;
-    if (reportMode === ReportMode.MONTHLY) {
-      fileName = `${title.replace(/\s/g, '_')}_Individual.zip`;
-    }
-
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(zipBlob);
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-  } catch (error) {
-    console.error('Error generating individual reports ZIP:', error);
-    alert('Ocurrió un error al generar el archivo ZIP.');
+  data: ProcessedData, title: string, year: number, reportMode: ReportMode, format = ExportFormat.TEXT,
+): Promise<void> => {
+  const zip = new JSZip();
+  for (const section of sortedSections(data)) {
+    const workbook = createReportWorkbook({ [section]: data[section] }, format);
+    zip.file(`${section}.xlsx`, XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }));
   }
+  const name = title.trim().replace(/\.(?:xlsx|zip)$/i, '') || `Data_Stage_${reportMode}_${year}`;
+  downloadBlob(await zip.generateAsync({ type: 'blob' }), `${name}_Individual.zip`);
 };

@@ -37,8 +37,8 @@ describe('detectPeriodFromZipFile', () => {
   });
 });
 
-describe('processZipFile — regla de fracción arancelaria partida (551)', () => {
-  it('une Fraccion (8 dígitos) + SubdivisionFraccion (2 dígitos) en una sola columna, con datos reales del SAT', async () => {
+describe('processZipFile — columnas originales (551)', () => {
+  it('conserva Fraccion y SubdivisionFraccion como campos independientes', async () => {
     const header501 = HEADER_501;
     const row501 = '1769|6000343|480|2|A1|480||BMA2211187E1|X|17|0|0|0|0|0|1|7|4|4|9|Y|Z||134|20909|W|AG|MEX|1|2026-01-13 15:00:00|2026-01-13 15:57:02|';
 
@@ -59,10 +59,10 @@ describe('processZipFile — regla de fracción arancelaria partida (551)', () =
 
     const header = data['551'][0];
     const enrichedRow = data['551'][1];
-    const fraccionIdx = header.indexOf('FraccionArancelaria');
+    const fraccionIdx = header.indexOf('Fraccion');
     expect(fraccionIdx).toBeGreaterThan(-1);
-    // La regla debe unir "85389099" + "99" (SubdivisionFraccion) -> "8538909999"
-    expect(enrichedRow[fraccionIdx]).toBe('8538909999');
+    expect(enrichedRow[fraccionIdx]).toBe('85389099');
+    expect(enrichedRow[header.indexOf('SubdivisionFraccion')]).toBe('99');
   });
 });
 

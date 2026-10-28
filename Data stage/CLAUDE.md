@@ -116,7 +116,7 @@ python consolidar.py RFC_2026_ENE-MAY_Solicitudes.xlsx \
 
 **Comportamiento:**
 - Acepta los zips directamente (no hace falta descomprimirlos antes)
-- Cada hoja del Excel resultante contiene los datos de **todos los meses apilados** en orden cronológico
+- Cada hoja del Excel resultante contiene los datos de **todos los meses apilados** en el orden en que el usuario entrega los ZIP
 - La columna `Pedimento_Unificado` usa el año correcto por fila (cada mes puede tener su propio año)
 - Hojas vacías conservan el header y los filtros aunque no tengan datos
 - Al final llama a `verify_output()` — debe mostrar `✅ Verificación OK`

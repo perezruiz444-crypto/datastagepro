@@ -86,3 +86,14 @@ describe('detectDateColumns', () => {
     expect(cols.has(0)).toBe(false);
   });
 });
+
+
+describe('integridad del calendario y códigos', () => {
+  it('rechaza días inexistentes sin normalizarlos a otro mes', () => {
+    for (const value of ['2026-02-31', '20260229', '31/04/2026']) expect(parseDateOnly(value)).toBeNull();
+    expect(parseDateOnly('2024-02-29')?.getDate()).toBe(29);
+  });
+  it('no transforma códigos de ocho dígitos en fechas de Excel', () => {
+    expect(detectDateColumns([['Codigo'], ['20260105'], ['20260106']]).size).toBe(0);
+  });
+});

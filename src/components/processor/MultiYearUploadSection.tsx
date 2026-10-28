@@ -56,7 +56,7 @@ export const MultiYearUploadSection: React.FC<MultiYearUploadSectionProps> = ({ 
         </CardTitle>
         <CardDescription>
           Combina reportes históricos previos (Excel) con ZIPs mensuales nuevos. Útil para actualizar tu histórico
-          conforme te llega cada Data Stage. Si todas las fuentes tienen Pedimento_Unificado, se deduplica automáticamente.
+          conforme te llega cada Data Stage. Se conservan todas las filas y partidas; los encabezados de cada tabla deben coincidir.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -77,7 +77,7 @@ export const MultiYearUploadSection: React.FC<MultiYearUploadSectionProps> = ({ 
             >
               <FileSpreadsheet className="h-10 w-10 text-secondary mx-auto mb-2" />
               <p className="text-sm font-medium">Arrastra Excels históricos aquí</p>
-              <p className="text-xs text-muted-foreground mt-1">Formato Lovable o Gemini (autodetectado)</p>
+              <p className="text-xs text-muted-foreground mt-1">Hojas con los mismos encabezados que los ZIP</p>
               <input type="file" ref={excelInputRef} multiple accept=".xlsx" className="hidden"
                      onChange={(e) => handleExcelFiles(e.target.files)} />
             </div>

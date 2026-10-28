@@ -46,8 +46,8 @@ const ResetPassword = () => {
       if (error) throw error;
       toast({ title: '¡Contraseña actualizada!', description: 'Ya puedes iniciar sesión con tu nueva contraseña.' });
       navigate('/auth');
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Ocurrió un error inesperado.', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }

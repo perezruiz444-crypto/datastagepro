@@ -53,7 +53,7 @@ export const HistoricalUploadSection: React.FC<HistoricalUploadSectionProps> = (
           <History className="h-5 w-5 text-primary" /> Histórico Multianual
         </CardTitle>
         <CardDescription>
-          Sube los archivos ZIP de todos los periodos que desees consolidar. El sistema procesará cada ZIP desde cero y generará un ecosistema histórico completo con todas las tablas, incluyendo columnas de Año y Mes.
+          Sube los archivos ZIP de todos los periodos que desees consolidar. Se apilarán las filas en el orden de carga, conservando las columnas originales y el Pedimento_Unificado.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

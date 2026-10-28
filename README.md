@@ -71,3 +71,19 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+
+## Desarrollo y validación
+
+```sh
+npm ci
+npm test
+npm run lint
+npm run build
+```
+
+La compilación ejecuta TypeScript antes de Vite. El flujo de procesamiento es local y no requiere conectividad con Supabase.
+
+El Excel coloca `Pedimento_Unificado` en A y conserva desde B los encabezados, el orden y los valores de los `.asc`. El año de la clave procede de `Fecha_Inicial` en `Resumen`; si falta se usa el año indicado o el actual. Las fracciones y subdivisiones se mantienen separadas. Las filas se apilan en el orden de carga, sin deduplicar por pedimento. Al combinar fuentes, los encabezados de cada tabla deben coincidir exactamente en nombre y orden; de lo contrario se informa un error.
+
+El formato Texto conserva códigos, ceros y montos como texto. Las columnas con fechas ISO válidas se exportan como fechas de Excel sin hora. El modo Numérico es opcional y mantiene protegidos los identificadores. Los reportes individuales usan el mismo formato que el consolidado.
