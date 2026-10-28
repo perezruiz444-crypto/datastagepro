@@ -49,7 +49,7 @@ const Reviews: React.FC = () => {
     if (data) {
       setReviews(data as Review[]);
       if (data.length > 0) {
-        const avg = data.reduce((sum: number, r: any) => sum + r.rating, 0) / data.length;
+        const avg = data.reduce((sum, r) => sum + r.rating, 0) / data.length;
         setAvgRating(Math.round(avg * 10) / 10);
       }
     }

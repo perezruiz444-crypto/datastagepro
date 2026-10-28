@@ -37,7 +37,7 @@ export const extractYearFromDateField = (value: string): string => {
     return /^\d{2}$/.test(short) ? short : '00';
   }
 
-  const dmyMatch = trimmed.match(/^\d{2}[\/\-]\d{2}[\/\-](\d{4})/);
+  const dmyMatch = trimmed.match(/^\d{2}[/-]\d{2}[/-](\d{4})/);
   if (dmyMatch) {
     return dmyMatch[1].substring(2, 4);
   }

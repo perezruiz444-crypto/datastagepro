@@ -23,9 +23,7 @@ const Processor = () => {
   const [processedData, setProcessedData] = useState<ProcessedData>({});
   const [reportTitle, setReportTitle] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [annualFiles, setAnnualFiles] = useState<Record<string, File | null>>(
-    Object.fromEntries(MONTH_NAMES.map(m => [m, null]))
-  );
+  const [annualFiles, setAnnualFiles] = useState<Record<string, File | null>>({});
   const [errorMessage, setErrorMessage] = useState('');
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
 
@@ -122,7 +120,7 @@ const Processor = () => {
     }
   };
 
-  // Multi-year merge (Excel previos + ZIPs nuevos con dedup)
+  // Combina fuentes conservando todas las partidas.
   const handleMultiYearProcess = async (excelFiles: File[], zipFiles: File[]) => {
     setAppState(AppState.PROCESSING);
     cancellationSignal.current = { current: false };

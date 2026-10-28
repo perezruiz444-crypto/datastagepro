@@ -45,10 +45,10 @@ const Auth = () => {
         title: '¡Cuenta creada!',
         description: 'Revisa tu email para confirmar tu cuenta.',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'Ocurrió un error inesperado.',
         variant: 'destructive',
       });
     } finally {
@@ -63,10 +63,10 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       navigate('/app');
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'Ocurrió un error inesperado.',
         variant: 'destructive',
       });
     } finally {
@@ -81,7 +81,7 @@ const Auth = () => {
     if (error) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'Ocurrió un error inesperado.',
         variant: 'destructive',
       });
     }
@@ -96,7 +96,7 @@ const Auth = () => {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Ocurrió un error inesperado.', variant: 'destructive' });
     } else {
       toast({ title: 'Email enviado', description: 'Revisa tu bandeja de entrada para restablecer tu contraseña.' });
     }

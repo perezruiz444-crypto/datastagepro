@@ -109,6 +109,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
         console.error('Error detectando periodo:', e);
       }
       if (guessedMonth) {
+        delete newFilesMap[guessedMonth];
         newFilesMap[guessedMonth] = file;
       } else {
         skipped.push(file.name);
@@ -122,7 +123,9 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
   }, [files, detectedYears, onFilesChange]);
 
   const handleSingleFileChange = useCallback((month: string, file: File | null) => {
-    const updated = { ...files, [month]: file };
+    const updated = { ...files };
+    delete updated[month];
+    if (file) updated[month] = file;
     onFilesChange(updated);
     if (!file) {
       const newYears = { ...detectedYears };
@@ -142,7 +145,7 @@ export const AnnualUploadSection: React.FC<AnnualUploadSectionProps> = ({
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>Cargue los archivos .zip de los periodos a consolidar. Puede procesar el ejercicio fiscal completo o periodos parciales (1 a 11 meses); el motor unificará la estructura de los datos disponibles.</CardDescription>
+        <CardDescription>Cargue los archivos .zip de los periodos a consolidar. Puede procesar el ejercicio fiscal completo o periodos parciales (1 a 11 meses); se conservarán las columnas originales y el orden de carga.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div
